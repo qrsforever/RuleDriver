@@ -8,9 +8,13 @@
 
 #include "RuleEventHandler.h"
 #include "RuleEventThread.h"
+#include "RuleEventTypes.h"
 
-#include "Message.h"
 #include "Log.h"
+#include "Message.h"
+#include "MessageTypes.h"
+
+using namespace UTILS;
 
 namespace HB {
 
@@ -29,16 +33,24 @@ RuleEventHandler::~RuleEventHandler()
 
 void RuleEventHandler::handleMessage(Message *msg)
 {
-    switch(msg->what) {
+    if (msg->what != RET_REFRESH_TIMER)
+        LOGD("msg: [%d] [%d] [%d]\n", msg->what, msg->arg1, msg->arg2);
 
+    switch(msg->what) {
+        case RET_REFRESH_TIMER:
+            sendEmptyMessageDelayed(RET_REFRESH_TIMER, 1000);
+            break;
+        default:
+            break;
     }
 }
 
 RuleEventHandler& ruleHandler()
 {
     if (0 == gRuleHandler) {
-        MessageQueue *queue = RuleEventThread::getInstance().getMessageQueue();
-        gRuleHandler = new RuleEventHandler(queue);
+        RuleEventThread &ruleThread = RuleEventThread::getInstance();
+        gRuleHandler = new RuleEventHandler(ruleThread.getMessageQueue());
+        ruleThread.start();
     }
     return *gRuleHandler;
 }

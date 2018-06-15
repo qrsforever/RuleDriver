@@ -48,7 +48,7 @@ OUT_DIR = output
 OBJ_DIR = $(OUT_DIR)/obj
 
 # 指定运行环境
-RPATH = ":$(OUT_DIR):$(CLIPS_DIR)"
+RPATH = ":$(OUT_DIR):$(CLIPS_DIR)/core"
 
 # 额外增加的源文件或者排除不编译的源文件
 SPECIAL_SRC := $(RULEPRO_DIR)/MainPublicHandler.cpp

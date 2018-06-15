@@ -13,17 +13,15 @@
 
 #ifdef __cplusplus
 
-using namespace UTILS;
-
 namespace HB {
 
-class RuleEventHandler : public MessageHandler {
+class RuleEventHandler : public ::UTILS::MessageHandler {
 public:
-    RuleEventHandler(MessageQueue *queue);
+    RuleEventHandler(::UTILS::MessageQueue *queue);
     ~RuleEventHandler();
 
 protected:
-    void handleMessage(Message *msg);
+    void handleMessage(::UTILS::Message *msg);
 
 }; /* class RuleEventHandler */
 

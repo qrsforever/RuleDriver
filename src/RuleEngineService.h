@@ -9,19 +9,35 @@
 #ifndef __RuleEngineService_H__
 #define __RuleEngineService_H__
 
+#include "MessageHandler.h"
+#include <memory>
 
 #ifdef __cplusplus
 
+using namespace UTILS;
+
 namespace HB {
 
-class RuleEngineService {
+class DataChannel;
+class RuleEngineCore;
+
+class RuleEngineService : public MessageHandler::Callback {
 public:
     RuleEngineService();
     ~RuleEngineService();
 
-    void start();
+    bool handleMessage(Message *msg);
+
+    bool newRuleFound(std::string ruleId);
+    void init();
+
+    void setRuleChannel(std::shared_ptr<DataChannel> channel);
+    void setDeviceChannel(std::shared_ptr<DataChannel> channel);
 
 private:
+    RuleEngineCore *mCore;
+    std::shared_ptr<DataChannel> mRuleChannel;
+    std::shared_ptr<DataChannel> mDeviceChannel;
 
 }; /* class RuleEngineService */
 
