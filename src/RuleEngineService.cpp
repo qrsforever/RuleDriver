@@ -10,6 +10,8 @@
 #include "RuleEngineCore.h"
 #include "RuleEventHandler.h"
 #include "RuleEventTypes.h"
+#include "DataChannel.h"
+#include "StringArray.h"
 #include "Message.h"
 #include "Log.h"
 
@@ -39,6 +41,8 @@ void RuleEngineService::init()
 {
     LOGTT();
     mCore->init();
+    mRuleChannel->init();
+    mDeviceChannel->init();
 }
 
 void RuleEngineService::setRuleChannel(std::shared_ptr<DataChannel> channel)
@@ -65,15 +69,38 @@ bool RuleEngineService::handleMessage(Message *msg)
     if (msg->what != RET_REFRESH_TIMER)
         LOGD("msg: [%d] [%d] [%d]\n", msg->what, msg->arg1, msg->arg2);
 
+    if (!mCore)
+        return false;
+
     switch(msg->what) {
         case RET_REFRESH_TIMER:
-            if (mCore)
-                mCore->handleTimer();
+            mCore->handleTimer();
             return false;
+        case RET_INSTANCE_ADD:
+            if (msg->obj) {
+                std::shared_ptr<StringArray> arr(std::dynamic_pointer_cast<StringArray>(msg->obj));
+                if (arr && arr->size() == 2)
+                    mCore->handleInstanceAdd((*arr)[0], (*arr)[1]);
+            }
+            return true;
+        case RET_INSTANCE_DEL:
+            if (msg->obj) {
+                std::shared_ptr<StringArray> arr(std::dynamic_pointer_cast<StringArray>(msg->obj));
+                if (arr && arr->size() == 1)
+                    mCore->handleInstanceDel((*arr)[0]);
+            }
+            return true;
+        case RET_INSTANCE_PUT:
+            if (msg->obj) {
+                std::shared_ptr<StringArray> arr(std::dynamic_pointer_cast<StringArray>(msg->obj));
+                if (arr && arr->size() == 3)
+                    mCore->handleInstancePut((*arr)[0], (*arr)[1], (*arr)[2]);
+            }
+            return true;
         default:
             return false;
     }
-    return true;
+    return false;
 }
 
 RuleEngineService& ruleEngine()

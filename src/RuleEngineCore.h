@@ -31,7 +31,12 @@ public:
 
     void init();
     void finalize();
+
     void handleTimer();
+    void handleRuleChanged(const char *ruleName);
+    void handleInstanceAdd(const char *insName, const char *clsName);
+    void handleInstanceDel(const char *insName);
+    void handleInstancePut(const char *insName, const char *slot, const char *value);
 
 private:
 
@@ -40,15 +45,17 @@ private:
     void _OnReset(void);
     void _OnRuleFiring(void);
 
+    int _CallGetDebugLevel();
     std::string _CallGetRootDir();
     Values _CallGetClsesFiles();
     Values _CallGetRulesFiles();
     Values _CallNow();
 
 private:
+    UTILS::Mutex mEnvMutex;
     RuleEventHandler &mHandler;
     Environment *mEnv;
-    UTILS::Mutex mEnvMutex;
+    std::vector<Instance::pointer> mInsList;
 }; /* class RuleEngineCore */
 
 

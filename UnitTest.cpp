@@ -19,6 +19,9 @@
 
 using namespace HB;
 
+extern "C" int initMainThread();
+extern "C" int mainThreadRun();
+
 class InitThread : public Thread {
 public:
     InitThread(){}
@@ -45,12 +48,15 @@ void InitThread::run()
      *  Device Manger module init  *
      *******************************/
 
-    /* Message *msg = mainHandler().obtainMessage(MT_RULE, RULE_EVENT_SYNC, RULE_SYNC_NONE);
-     * mainHandler().sendMessage(msg); */
+
+    /* Simulate Test */
+    mainHandler().sendEmptyMessage(MT_SIMULATE);
 }
 
 int main(int argc, char *argv[])
 {
+    (void)argc;
+    (void)argv;
     printf("\n-----------Test---------\n");
 
     /***************************

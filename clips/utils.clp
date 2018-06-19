@@ -32,14 +32,3 @@
 	   	(load-file (nth$ ?n $?file-list))
 	)
 )
-
-;-----------------------------------------------------------------
-;	retract time <-- (time (now)) from program
-;-----------------------------------------------------------------
-(defrule retract-time
-    (declare (salience -9999))
-    ?f <- (time $?)
-  =>
-    (facts)
-    (retract ?f)
-)

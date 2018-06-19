@@ -6,5 +6,12 @@
  *  Copyright QRS
  ****************************************************************************/
 
+#define ID_PREFIX "id-"
+
+/****************
+*  Rule Event  *
+****************/
 #define RET_REFRESH_TIMER 1           /* Rule Event Type: refresh timer */
-#define RET_CHECK_RULE_VERSION 2      /* Rule Event Type: check rule version */
+#define RET_INSTANCE_ADD  2           /* Rule Event Type: device online */
+#define RET_INSTANCE_DEL  3           /* Rule Event Type: device offline */
+#define RET_INSTANCE_PUT  4           /* Rule Event Type: device put attr */

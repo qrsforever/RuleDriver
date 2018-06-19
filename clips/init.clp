@@ -4,12 +4,13 @@
 ;=================================================================
 
 (defglobal
-    ?*ROOT_DIR* = (get-root-dir)
+    ?*LOG-LEVEL* = (get-debug-level)
+    ?*ROOT-DIR* = (get-root-dir)
     ?*START-TIME* = (now)
 )
 
 (deffunction resolve-file (?file)
-    (bind ?fn (str-cat ?*ROOT_DIR* "/" ?file))
+    (bind ?fn (str-cat ?*ROOT-DIR* "/" ?file))
     (if (open ?fn fd)
      then
         (close fd)
@@ -19,8 +20,9 @@
     (return FALSE)
 )
 
-(load* (resolve-file utils.clp))
 (load* (resolve-file globals.clp))
+(load* (resolve-file utils.clp))
+(load* (resolve-file datatime.clp))
 
 (defrule load-files
     (init)
@@ -38,6 +40,16 @@
     (load-finished)
   =>
     (reset)
+    (if (>= ?*LOG-LEVEL* ?*LOG-LEVEL-TRACE*)
+     then
+        (printout trace crlf ">>>>>> list globals:" crlf)
+        (show-defglobals)
+        (printout trace crlf ">>>>>> list defclasses:" crlf)
+        (list-defclasses)
+        (printout trace crlf ">>>>>> list defrules:" crlf)
+        (list-defrules)
+        (printout trace crlf)
+    )
     (seed (integer (time)))
 )
 

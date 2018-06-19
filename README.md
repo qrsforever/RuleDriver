@@ -11,8 +11,14 @@ categories: [ Local ]
 ====
 
 1. Utils: `https://github.com/qrsforever/CppUtils`
+>> see:
+    Misc/README.md
+    Message/README.md
+    Log/README.md
 
 2. Clipscpp: `https://github.com/qrsforever/Clipscpp`
+>> see:
+    Clipscpp/README.md
 
 3. Clips630:
 

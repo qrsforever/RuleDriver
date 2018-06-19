@@ -34,7 +34,7 @@ CC		:=
 AR		:= $(CROSS_COMPILE)ar
 CFLAGS  := $(OPTIMIZE) $(WARNINGS) $(DEFS)
 CPPFLAGS:= -std=c++11 -lClipscpp -lclips -lUtils_log -lUtils_message -lUtils_misc -lpthread
-LDFLAGS := -L$(CLIPS_LIB) -L$(CLIPSCPP_DIR)/output -L$(MISC_DIR)/output -L$(MESSAGE_DIR)/output -L$(LOG_DIR)/output
+LDFLAGS := -L$(CLIPSCPP_DIR)/output -L$(CLIPS_LIB) -L$(MISC_DIR)/output -L$(MESSAGE_DIR)/output -L$(LOG_DIR)/output
 INCLUDE := -I$(CLIPSCPP_DIR)/src -I$(MISC_DIR)/src -I$(MESSAGE_DIR)/src -I$(LOG_DIR)/src
 
 # 源文件可能的后缀
@@ -52,7 +52,7 @@ RPATH = ":$(OUT_DIR):$(CLIPS_DIR)"
 
 # 额外增加的源文件或者排除不编译的源文件
 SPECIAL_SRC := $(RULEPRO_DIR)/MainPublicHandler.cpp
-EXCLUDE_SRC := src/UnitTest.cpp %HomeBrainMain.cpp
+EXCLUDE_SRC := %UnitTest.cpp %HomeBrainMain.cpp
 
 # 设置目标类型(exe, a, so), 及目标名字
 TARGET_TYPE := a
@@ -134,7 +134,7 @@ run:$(TARGET_NAME)
 	@$(TARGET_NAME)
 
 test:$(TARGET_NAME)
-	$(CXX) $(INCLUDE) $(OBJECTS) src/UnitTest.cpp -o $(OUT_DIR)/$@ $(LDFLAGS) $(CPPFLAGS) ${CFLAGS} -Wl,-rpath=$(RPATH)
+	$(CXX) $(INCLUDE) $(OBJECTS) UnitTest.cpp -o $(OUT_DIR)/$@ $(LDFLAGS) $(CPPFLAGS) ${CFLAGS} -Wl,-rpath=$(RPATH)
 	$(OUT_DIR)/$@
 
 .PHONY: $(PHONY)

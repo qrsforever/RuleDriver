@@ -84,6 +84,7 @@ void RuleEngineCore::init()
     mEnv->regist_rulefiring_callback(std::bind(&RuleEngineCore::_OnRuleFiring, this));
 
     /* regist function for clips script */
+    mEnv->add_function("get-debug-level", std::make_shared<Functor<int>>(this, &RuleEngineCore::_CallGetDebugLevel));
     mEnv->add_function("get-root-dir", std::make_shared<Functor<std::string>>(this, &RuleEngineCore::_CallGetRootDir));
     mEnv->add_function("get-clses-files", std::make_shared<Functor<Values>>(this, &RuleEngineCore::_CallGetClsesFiles));
     mEnv->add_function("get-rules-files", std::make_shared<Functor<Values>>(this, &RuleEngineCore::_CallGetRulesFiles));
@@ -119,6 +120,33 @@ void RuleEngineCore::handleTimer()
     mEnv->run();
 }
 
+void RuleEngineCore::handleRuleChanged(const char *ruleName)
+{
+    LOGT("(%s)\n", ruleName);
+
+}
+
+void RuleEngineCore::handleInstanceAdd(const char *insName, const char *clsName)
+{
+    LOGT("(%s %s)\n", insName, clsName);
+
+}
+
+void RuleEngineCore::handleInstanceDel(const char *insName)
+{
+    LOGT("(%s)\n", insName);
+
+}
+
+void RuleEngineCore::handleInstancePut(const char *insName, const char *slot, const char *value)
+{
+    LOGT("(%s %s %s)\n", insName, slot, value);
+    Mutex::Autolock _l(&mEnvMutex);
+
+    mEnv->refresh_agenda();
+    mEnv->run();
+}
+
 void RuleEngineCore::_OnClear(void)
 {
     LOGTT();
@@ -141,6 +169,11 @@ void RuleEngineCore::_OnRuleFiring(void)
     LOGTT();
 }
 
+int RuleEngineCore::_CallGetDebugLevel()
+{
+    return getLogLevel();
+}
+
 std::string RuleEngineCore::_CallGetRootDir()
 {
     LOGTT();
@@ -155,6 +188,7 @@ Values RuleEngineCore::_CallGetClsesFiles()
     /* TODO */
     rv.push_back(std::string(CLSES_SEARCH_DIR "/class-001.clp"));
     rv.push_back(std::string(CLSES_SEARCH_DIR "/class-002.bat"));
+    rv.push_back(std::string(CLSES_SEARCH_DIR "/class-test.clp"));
     return rv;
 }
 
@@ -165,6 +199,7 @@ Values RuleEngineCore::_CallGetRulesFiles()
     /* TODO */
     rv.push_back(std::string(RULES_SEARCH_DIR "/rule-001.clp"));
     rv.push_back(std::string(RULES_SEARCH_DIR "/rule-002.bat"));
+    rv.push_back(std::string(RULES_SEARCH_DIR "/rule-test.clp"));
     return rv;
 }
 
