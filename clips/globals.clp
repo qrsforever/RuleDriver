@@ -46,3 +46,21 @@
     (bind ?self:Class (class ?self))
     (bind ?self:insCnt (+ ?self:insCnt 1))
 )
+
+;-----------------------------------------------------------------
+;	Global Function
+;-----------------------------------------------------------------
+
+(deffunction act_control (?id ?slot ?value)
+    (printout debug "act_control(" ?id "," ?slot "," ?value ")" crlf)    
+)
+
+(deffunction act_notify (?title ?message)
+    (printout debug "act_notify(" ?title "," ?message ")" crlf) 
+)
+
+(deffunction act_scene (?type $?ruleid-list)
+    (foreach ?ruleid (create$ $?ruleid-list)
+        (printout debug "act_scene(" ?ruleid ")" crlf)
+    )
+)

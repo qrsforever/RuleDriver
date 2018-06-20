@@ -26,14 +26,14 @@ class RuleEventHandler;
 
 class RuleEngineCore {
 public:
-    RuleEngineCore(RuleEventHandler &handler);
+    RuleEngineCore(RuleEventHandler &handler, std::string &rootdir);
     ~RuleEngineCore();
 
     void init();
     void finalize();
 
     void handleTimer();
-    void handleRuleChanged(const char *ruleName);
+    void handleRuleChanged(const char *ruleName, const char *ruleID, const char *ruleStr);
     void handleInstanceAdd(const char *insName, const char *clsName);
     void handleInstanceDel(const char *insName);
     void handleInstancePut(const char *insName, const char *slot, const char *value);
@@ -55,7 +55,9 @@ private:
     UTILS::Mutex mEnvMutex;
     RuleEventHandler &mHandler;
     Environment *mEnv;
+    std::string &mRootDir;
     std::vector<Instance::pointer> mInsList;
+    // std::map<std::string insname, Instance::pointer> mInses;
 }; /* class RuleEngineCore */
 
 

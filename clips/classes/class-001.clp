@@ -13,3 +13,13 @@
         (default OFF)
     )
 )
+
+(defclass TempSensor
+    (is-a DEVICE) (role concrete) (pattern-match reactive) 
+    (slot CurrentTemperature)
+)
+
+(defclass Light
+    (is-a DEVICE) (role concrete) (pattern-match reactive) 
+    (slot onOffLight) 
+)

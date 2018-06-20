@@ -10,12 +10,12 @@
 #include "Router.h"
 #include "RuleEventHandler.h"
 #include "RuleEventTypes.h"
-
 #include "SysTime.h"
 
-#define CLIPS_ROOT_DIR "clips"
-#define CLSES_SEARCH_DIR "classes"
-#define RULES_SEARCH_DIR "rules"
+#include<fstream>
+
+#define CLSES_SEARCH_DIR "classes/"
+#define RULES_SEARCH_DIR "rules/"
 
 #define SHOW_VALUE(item, tok) \
     do { \
@@ -44,9 +44,9 @@ using namespace UTILS;
 
 namespace HB {
 
-RuleEngineCore::RuleEngineCore(RuleEventHandler &handler)
+RuleEngineCore::RuleEngineCore(RuleEventHandler &handler, std::string &rootdir)
     : mHandler(handler)
-    , mEnv(0)
+    , mEnv(0), mRootDir(rootdir)
 {
     LOGTT();
 }
@@ -90,7 +90,7 @@ void RuleEngineCore::init()
     mEnv->add_function("get-rules-files", std::make_shared<Functor<Values>>(this, &RuleEngineCore::_CallGetRulesFiles));
     mEnv->add_function("now", std::make_shared<Functor<Values>>(this, &RuleEngineCore::_CallNow));
 
-    mEnv->batch_evaluate(CLIPS_ROOT_DIR "/init.clp");
+    mEnv->batch_evaluate(mRootDir + "/init.clp");
     mEnv->assert_fact("(init)");
     mEnv->refresh_agenda();
     mEnv->run();
@@ -120,10 +120,35 @@ void RuleEngineCore::handleTimer()
     mEnv->run();
 }
 
-void RuleEngineCore::handleRuleChanged(const char *ruleName)
+void RuleEngineCore::handleRuleChanged(const char *ruleName, const char *ruleID, const char *ruleStr)
 {
-    LOGT("(%s)\n", ruleName);
+    LOGT("(%s, %s)\n %s\n", ruleName, ruleID, ruleStr);
+    if (!ruleName || !ruleID || !ruleStr)
+        return;
 
+    Mutex::Autolock _l(&mEnvMutex);
+    Rule::pointer rule = mEnv->get_rule(ruleName);
+    if (rule)
+        rule->retract();
+
+    if (!mEnv->build(ruleStr)) {
+        LOGW("build rule [%s] error!\n", ruleName);
+        return;
+    }
+
+    /* write to file */
+    std::string filename("");
+    std::string fullname("");
+    filename.append("rule-").append(ruleID).append(".clp");
+    fullname.append(mRootDir).append("/").append(RULES_SEARCH_DIR).append(filename);
+    std::ofstream of(fullname);
+    if (of.is_open()) {
+        of << ruleStr << std::endl;
+        LOGD("write rule [%s]\n", fullname.c_str());
+        of.close();
+    }
+
+    /* update database */
 }
 
 void RuleEngineCore::handleInstanceAdd(const char *insName, const char *clsName)
@@ -178,7 +203,7 @@ std::string RuleEngineCore::_CallGetRootDir()
 {
     LOGTT();
     /* TODO current path: test for debug */
-    return CLIPS_ROOT_DIR;
+    return mRootDir;
 }
 
 Values RuleEngineCore::_CallGetClsesFiles()
@@ -186,9 +211,9 @@ Values RuleEngineCore::_CallGetClsesFiles()
     LOGTT();
     Values rv;
     /* TODO */
-    rv.push_back(std::string(CLSES_SEARCH_DIR "/class-001.clp"));
-    rv.push_back(std::string(CLSES_SEARCH_DIR "/class-002.bat"));
-    rv.push_back(std::string(CLSES_SEARCH_DIR "/class-test.clp"));
+    rv.push_back(std::string(CLSES_SEARCH_DIR "class-001.clp"));
+    rv.push_back(std::string(CLSES_SEARCH_DIR "class-002.bat"));
+    rv.push_back(std::string(CLSES_SEARCH_DIR "class-test.clp"));
     return rv;
 }
 
@@ -197,9 +222,9 @@ Values RuleEngineCore::_CallGetRulesFiles()
     LOGTT();
     Values rv;
     /* TODO */
-    rv.push_back(std::string(RULES_SEARCH_DIR "/rule-001.clp"));
-    rv.push_back(std::string(RULES_SEARCH_DIR "/rule-002.bat"));
-    rv.push_back(std::string(RULES_SEARCH_DIR "/rule-test.clp"));
+    rv.push_back(std::string(RULES_SEARCH_DIR "rule-001.clp"));
+    rv.push_back(std::string(RULES_SEARCH_DIR "rule-002.bat"));
+    rv.push_back(std::string(RULES_SEARCH_DIR "rule-test.clp"));
     return rv;
 }
 

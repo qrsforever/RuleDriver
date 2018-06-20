@@ -11,7 +11,6 @@
 #include "RuleEventHandler.h"
 #include "RuleEventTypes.h"
 #include "DataChannel.h"
-#include "StringArray.h"
 #include "Message.h"
 #include "Log.h"
 
@@ -21,11 +20,14 @@ using namespace UTILS;
 
 static RuleEngineService *gRuleEngine = 0;
 
+static std::string rulePayloadConvert(std::shared_ptr<RulePayload> payload);
+
 RuleEngineService::RuleEngineService()
-    : mCore(0), mRuleChannel(0), mDeviceChannel(0)
+    : mCore(0)
+    , mServerRoot("clips")
+    , mRuleChannel(0), mDeviceChannel(0)
 {
     LOGTT();
-    mCore = new RuleEngineCore(ruleHandler());
 }
 
 RuleEngineService::~RuleEngineService()
@@ -37,14 +39,6 @@ RuleEngineService::~RuleEngineService()
     }
 }
 
-void RuleEngineService::init()
-{
-    LOGTT();
-    mCore->init();
-    mRuleChannel->init();
-    mDeviceChannel->init();
-}
-
 void RuleEngineService::setRuleChannel(std::shared_ptr<DataChannel> channel)
 {
     mRuleChannel = channel;
@@ -53,6 +47,24 @@ void RuleEngineService::setRuleChannel(std::shared_ptr<DataChannel> channel)
 void RuleEngineService::setDeviceChannel(std::shared_ptr<DataChannel> channel)
 {
     mDeviceChannel = channel;
+}
+
+int RuleEngineService::init()
+{
+    LOGTT();
+
+    mCore = new RuleEngineCore(ruleHandler(), mServerRoot);
+    if (!mCore)
+        return -1;
+    if (!mRuleChannel)
+        return -1;
+    if (!mDeviceChannel)
+        return -1;
+
+    mCore->init();
+    mRuleChannel->init();
+    mDeviceChannel->init();
+    return 0;
 }
 
 bool RuleEngineService::newRuleFound(std::string ruleId)
@@ -78,23 +90,38 @@ bool RuleEngineService::handleMessage(Message *msg)
             return false;
         case RET_INSTANCE_ADD:
             if (msg->obj) {
-                std::shared_ptr<StringArray> arr(std::dynamic_pointer_cast<StringArray>(msg->obj));
-                if (arr && arr->size() == 2)
-                    mCore->handleInstanceAdd((*arr)[0], (*arr)[1]);
+                std::shared_ptr<InstancePayload> payload(std::dynamic_pointer_cast<InstancePayload>(msg->obj));
+                if (PT_INSTANCE_PAYLOAD == payload->type())
+                    mCore->handleInstanceAdd(payload->mInsName.c_str(), payload->mClsName.c_str());
             }
             return true;
         case RET_INSTANCE_DEL:
             if (msg->obj) {
-                std::shared_ptr<StringArray> arr(std::dynamic_pointer_cast<StringArray>(msg->obj));
-                if (arr && arr->size() == 1)
-                    mCore->handleInstanceDel((*arr)[0]);
+                std::shared_ptr<InstancePayload> payload(std::dynamic_pointer_cast<InstancePayload>(msg->obj));
+                if (PT_INSTANCE_PAYLOAD == payload->type())
+                    mCore->handleInstanceDel(payload->mInsName.c_str());
             }
             return true;
         case RET_INSTANCE_PUT:
             if (msg->obj) {
-                std::shared_ptr<StringArray> arr(std::dynamic_pointer_cast<StringArray>(msg->obj));
-                if (arr && arr->size() == 3)
-                    mCore->handleInstancePut((*arr)[0], (*arr)[1], (*arr)[2]);
+                std::shared_ptr<InstancePayload> payload(std::dynamic_pointer_cast<InstancePayload>(msg->obj));
+                if (PT_INSTANCE_PAYLOAD == payload->type()) {
+                    mCore->handleInstancePut(
+                        payload->mInsName.c_str(),
+                        payload->mSlots[0].nName.c_str(),
+                        payload->mSlots[0].nValue.c_str());
+                }
+            }
+            return true;
+        case RET_RULE_SYNC:
+            if (msg->obj) {
+                std::shared_ptr<RulePayload> payload(std::dynamic_pointer_cast<RulePayload>(msg->obj));
+                if (PT_RULE_PAYLOAD == payload->type()) {
+                    mCore->handleRuleChanged(
+                        payload->mRuleName.c_str(),
+                        payload->mRuleID.c_str(),
+                        payload->toString().c_str());
+                }
             }
             return true;
         default:

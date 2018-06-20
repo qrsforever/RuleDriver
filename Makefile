@@ -90,7 +90,7 @@ endif
 # 定义伪目标
 PHONY = all .mkdir clean
 
-all: .mkdir $(TARGET_NAME) test
+all: .mkdir $(TARGET_NAME)
 
 # 函数: 添加%.x依赖文件的路径
 define add_vpath
