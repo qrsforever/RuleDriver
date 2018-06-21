@@ -33,14 +33,14 @@
 ;-----------------------------------------------------------------
 
 ; Base Device Abstract
-(defclass DEVICE (is-a USER)
+(defclass DEVICE (is-a USER) (role abstract)
     (slot ID     (visibility public) (type SYMBOL))
-    (slot Class  (visibility public) (type SYMBOL))
+    (slot Class  (visibility public) (type SYMBOL) (access initialize-only))
     (slot Parent (visibility public) (default-dynamic nil))
     (slot UUID   (visibility public) (type STRING))
     (slot insCnt (type INTEGER) (storage shared) (default 0))
 )
-    
+
 (defmessage-handler DEVICE init after ()
     (bind ?self:ID (instance-name-to-symbol (instance-name ?self)))
     (bind ?self:Class (class ?self))
@@ -51,16 +51,33 @@
 ;	Global Function
 ;-----------------------------------------------------------------
 
-(deffunction act_control (?id ?slot ?value)
-    (printout debug "act_control(" ?id "," ?slot "," ?value ")" crlf)    
+(deffunction act-control (?id ?slot ?value)
+    (printout debug "act_control(" ?id "," ?slot "," ?value ")" crlf)
 )
 
-(deffunction act_notify (?title ?message)
-    (printout debug "act_notify(" ?title "," ?message ")" crlf) 
+(deffunction act-notify (?title ?message)
+    (printout debug "act_notify(" ?title "," ?message ")" crlf)
 )
 
-(deffunction act_scene (?type $?ruleid-list)
+(deffunction act-scene (?type $?ruleid-list)
     (foreach ?ruleid (create$ $?ruleid-list)
         (printout debug "act_scene(" ?ruleid ")" crlf)
+    )
+)
+
+;-----------------------------------------------------------------
+;	Global Rule
+;-----------------------------------------------------------------
+
+(defrule debug-show
+    ?f <- (show ?elem)
+  =>
+    (retract ?f)
+    (switch ?elem
+        (case instances then (instances))
+        (case facts then (facts))
+        (case rules then (rules))
+        (case agenda then (agenda))
+        (default (printout warn "Unkown elem: " ?elem crlf))
     )
 )

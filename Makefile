@@ -22,6 +22,7 @@ endif
 
 RULEPRO_DIR := ..
 CLIPSCPP_DIR:= ../Clipscpp
+PAYLOAD_DIR := ../Payload
 MISC_DIR := $(UTILS_DIR)/Misc
 MESSAGE_DIR := $(UTILS_DIR)/Message
 LOG_DIR := $(UTILS_DIR)/Log
@@ -34,8 +35,8 @@ CC		:=
 AR		:= $(CROSS_COMPILE)ar
 CFLAGS  := $(OPTIMIZE) $(WARNINGS) $(DEFS)
 CPPFLAGS:= -std=c++11 -lClipscpp -lclips -lUtils_log -lUtils_message -lUtils_misc -lpthread
-LDFLAGS := -L$(CLIPSCPP_DIR)/output -L$(CLIPS_LIB) -L$(MISC_DIR)/output -L$(MESSAGE_DIR)/output -L$(LOG_DIR)/output
-INCLUDE := -I$(CLIPSCPP_DIR)/src -I$(MISC_DIR)/src -I$(MESSAGE_DIR)/src -I$(LOG_DIR)/src
+LDFLAGS := -L$(CLIPSCPP_DIR)/output -L$(CLIPS_LIB) -L$(PAYLOAD_DIR)/output -L$(MISC_DIR)/output -L$(MESSAGE_DIR)/output -L$(LOG_DIR)/output
+INCLUDE := -I$(CLIPSCPP_DIR)/src -I$(MISC_DIR)/src -I$(MESSAGE_DIR)/src -I$(LOG_DIR)/src -I$(PAYLOAD_DIR)/src
 
 # 源文件可能的后缀
 SRCEXTS := c C cc cpp CPP c++ cxx cp

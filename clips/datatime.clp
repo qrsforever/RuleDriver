@@ -12,7 +12,7 @@
     ?f <- (time $?)
   =>
     (if (>= ?*LOG-LEVEL* ?*LOG-LEVEL-TRACE*)
-      then 
+      then
       (facts)
     )
     (retract ?f)

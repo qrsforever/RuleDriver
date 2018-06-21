@@ -11,6 +11,9 @@
 #include "RuleEventHandler.h"
 #include "RuleEventTypes.h"
 #include "DataChannel.h"
+#include "InstancePayload.h"
+#include "ClassPayload.h"
+#include "RulePayload.h"
 #include "Message.h"
 #include "Log.h"
 
@@ -19,8 +22,6 @@ namespace HB {
 using namespace UTILS;
 
 static RuleEngineService *gRuleEngine = 0;
-
-static std::string rulePayloadConvert(std::shared_ptr<RulePayload> payload);
 
 RuleEngineService::RuleEngineService()
     : mCore(0)
@@ -113,11 +114,21 @@ bool RuleEngineService::handleMessage(Message *msg)
                 }
             }
             return true;
+        case RET_CLASS_SYNC:
+            if (msg->obj) {
+                std::shared_ptr<ClassPayload> payload(std::dynamic_pointer_cast<ClassPayload>(msg->obj));
+                if (PT_CLASS_PAYLOAD == payload->type()) {
+                    mCore->handleClassSync(
+                        payload->mClsName.c_str(),
+                        payload->toString().c_str());
+                }
+            }
+            return true;
         case RET_RULE_SYNC:
             if (msg->obj) {
                 std::shared_ptr<RulePayload> payload(std::dynamic_pointer_cast<RulePayload>(msg->obj));
                 if (PT_RULE_PAYLOAD == payload->type()) {
-                    mCore->handleRuleChanged(
+                    mCore->handleRuleSync(
                         payload->mRuleName.c_str(),
                         payload->mRuleID.c_str(),
                         payload->toString().c_str());

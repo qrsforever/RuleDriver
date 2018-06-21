@@ -13,6 +13,7 @@
 #include "SysTime.h"
 
 #include<fstream>
+#include <sstream>
 
 #define CLSES_SEARCH_DIR "classes/"
 #define RULES_SEARCH_DIR "rules/"
@@ -54,6 +55,7 @@ RuleEngineCore::RuleEngineCore(RuleEventHandler &handler, std::string &rootdir)
 RuleEngineCore::~RuleEngineCore()
 {
     LOGTT();
+    mInses.clear();
     finalize();
 }
 
@@ -120,10 +122,38 @@ void RuleEngineCore::handleTimer()
     mEnv->run();
 }
 
-void RuleEngineCore::handleRuleChanged(const char *ruleName, const char *ruleID, const char *ruleStr)
+void RuleEngineCore::handleClassSync(const char *clsName, const char *buildStr)
 {
-    LOGT("(%s, %s)\n %s\n", ruleName, ruleID, ruleStr);
-    if (!ruleName || !ruleID || !ruleStr)
+    LOGT("(%s)\n%s\n", clsName, buildStr);
+    if (!clsName || !buildStr)
+        return;
+
+    Mutex::Autolock _l(&mEnvMutex);
+    Class::pointer cls = mEnv->get_class(clsName);
+    if (cls)
+        cls->undefine();
+    if (!mEnv->build(buildStr)) {
+        LOGW("build class [%s] error!\n", clsName);
+        return;
+    }
+
+    /* write to file */
+    std::string filename("");
+    std::string fullname("");
+    filename.append("dev-").append(clsName).append(".clp");
+    fullname.append(mRootDir).append("/").append(CLSES_SEARCH_DIR).append(filename);
+    std::ofstream of(fullname);
+    if (of.is_open()) {
+        of << buildStr << std::endl;
+        LOGD("write rule [%s]\n", fullname.c_str());
+        of.close();
+    }
+}
+
+void RuleEngineCore::handleRuleSync(const char *ruleName, const char *ruleID, const char *buildStr)
+{
+    LOGD("(%s, %s)\n%s\n", ruleName, ruleID, buildStr);
+    if (!ruleName || !ruleID || !buildStr)
         return;
 
     Mutex::Autolock _l(&mEnvMutex);
@@ -131,7 +161,7 @@ void RuleEngineCore::handleRuleChanged(const char *ruleName, const char *ruleID,
     if (rule)
         rule->retract();
 
-    if (!mEnv->build(ruleStr)) {
+    if (!mEnv->build(buildStr)) {
         LOGW("build rule [%s] error!\n", ruleName);
         return;
     }
@@ -143,7 +173,7 @@ void RuleEngineCore::handleRuleChanged(const char *ruleName, const char *ruleID,
     fullname.append(mRootDir).append("/").append(RULES_SEARCH_DIR).append(filename);
     std::ofstream of(fullname);
     if (of.is_open()) {
-        of << ruleStr << std::endl;
+        of << buildStr << std::endl;
         LOGD("write rule [%s]\n", fullname.c_str());
         of.close();
     }
@@ -154,22 +184,70 @@ void RuleEngineCore::handleRuleChanged(const char *ruleName, const char *ruleID,
 void RuleEngineCore::handleInstanceAdd(const char *insName, const char *clsName)
 {
     LOGT("(%s %s)\n", insName, clsName);
+    if (!insName || !clsName)
+        return;
 
+    Mutex::Autolock _l(&mEnvMutex);
+    InsesIt it = mInses.find(insName);
+    if (it != mInses.end()) {
+        LOGW("Instance[%s] already exists!\n", insName);
+        return;
+    }
+    std::stringstream ss;
+    ss << "(" << insName << " of " << clsName << ")";
+    Instance::pointer ins = mEnv->make_instance(ss.str().c_str());
+    if (!ins) {
+        LOGW("Make instance[%s] fail!\n", insName);
+        return;
+    }
+    mInses.insert(std::pair<std::string, Instance::pointer>(insName, ins));
+    LOGD("Make instance[%s] success!\n", insName);
+    mEnv->refresh_agenda();
+    mEnv->run();
+
+    /* TODO DEBUG */
+    ins->send("print");
+    mEnv->assert_fact("(show instances)");
 }
 
 void RuleEngineCore::handleInstanceDel(const char *insName)
 {
     LOGT("(%s)\n", insName);
+    if (!insName)
+        return;
 
+    Mutex::Autolock _l(&mEnvMutex);
+    InsesIt it = mInses.find(insName);
+    if (it == mInses.end()) {
+        LOGW("Not found instance[%s]!\n", insName);
+        return;
+    }
+    mInses.erase(it);
+
+    /* TODO DEBUG */
+    mEnv->assert_fact("(show instances)");
 }
 
 void RuleEngineCore::handleInstancePut(const char *insName, const char *slot, const char *value)
 {
     LOGT("(%s %s %s)\n", insName, slot, value);
+    if (!insName || !slot || !value)
+        return;
+
     Mutex::Autolock _l(&mEnvMutex);
+
+    InsesIt it = mInses.find(insName);
+    if (it == mInses.end()) {
+        LOGW("Not found instance[%s]!\n", insName);
+        return;
+    }
+    it->second->send(std::string("put-").append(slot), value);
 
     mEnv->refresh_agenda();
     mEnv->run();
+
+    /* TODO DEBUG */
+    it->second->send("print");
 }
 
 void RuleEngineCore::_OnClear(void)

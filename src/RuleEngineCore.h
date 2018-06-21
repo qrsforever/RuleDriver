@@ -11,6 +11,7 @@
 
 #include "Environment.h"
 #include "Mutex.h"
+#include <map>
 
 #ifdef __cplusplus
 
@@ -33,7 +34,8 @@ public:
     void finalize();
 
     void handleTimer();
-    void handleRuleChanged(const char *ruleName, const char *ruleID, const char *ruleStr);
+    void handleClassSync(const char *clsName, const char *buildStr);
+    void handleRuleSync(const char *ruleName, const char *ruleID, const char *buildStr);
     void handleInstanceAdd(const char *insName, const char *clsName);
     void handleInstanceDel(const char *insName);
     void handleInstancePut(const char *insName, const char *slot, const char *value);
@@ -52,12 +54,12 @@ private:
     Values _CallNow();
 
 private:
+    typedef std::map<std::string, Instance::pointer>::iterator InsesIt;
     UTILS::Mutex mEnvMutex;
     RuleEventHandler &mHandler;
     Environment *mEnv;
     std::string &mRootDir;
-    std::vector<Instance::pointer> mInsList;
-    // std::map<std::string insname, Instance::pointer> mInses;
+    std::map<std::string, Instance::pointer> mInses;
 }; /* class RuleEngineCore */
 
 
