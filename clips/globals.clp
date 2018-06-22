@@ -29,6 +29,10 @@
 )
 
 ;-----------------------------------------------------------------
+;	Global Template
+;-----------------------------------------------------------------
+
+;-----------------------------------------------------------------
 ;	Global Class
 ;-----------------------------------------------------------------
 
@@ -51,17 +55,45 @@
 ;	Global Function
 ;-----------------------------------------------------------------
 
+; Condition => Action: trigger device control
 (deffunction act-control (?id ?slot ?value)
-    (printout debug "act_control(" ?id "," ?slot "," ?value ")" crlf)
+    (if (instance-existp ?id)
+     then
+        (if (numberp ?value)
+         then
+            (bind ?value (str-cat # ?value))
+        )
+        (printout debug "device control(" ?id ", " ?slot ", " ?value ")" crlf)
+        (ins-push ?id ?slot ?value)
+     else
+        (printout warn "NOT FOUND: " ?id " instance" crlf)
+    )
 )
 
+; Condition => Action: trigger message notify
 (deffunction act-notify (?title ?message)
-    (printout debug "act_notify(" ?title "," ?message ")" crlf)
+    (if (and (lexemep ?title) (lexemep ?message))
+     then
+        (printout debug "act_notify(" ?title ", " ?message ")" crlf)
+        (msg-push ?title ?message)
+     else
+        (printout warn "Parameters is invalid: (" ?title ", " ?message ")" crlf)
+    )
 )
 
+; Condition => Action: trigger scene list
 (deffunction act-scene (?type $?ruleid-list)
-    (foreach ?ruleid (create$ $?ruleid-list)
-        (printout debug "act_scene(" ?ruleid ")" crlf)
+    (if (eq ?type list)
+     then
+        (foreach ?ruleid (create$ $?ruleid-list)
+            ; Check the ruleid exist
+            (if (defrule-module ?ruleid)
+              then
+                (assert (scene ?ruleid))
+              else
+                (printout warn "NOT FOUND: scene:" ?ruleid crlf)
+            )
+        )
     )
 )
 
@@ -69,7 +101,8 @@
 ;	Global Rule
 ;-----------------------------------------------------------------
 
-(defrule debug-show
+; show facts, ruels, instances and so on debug info
+(defrule show-elem
     ?f <- (show ?elem)
   =>
     (retract ?f)
@@ -80,4 +113,16 @@
         (case agenda then (agenda))
         (default (printout warn "Unkown elem: " ?elem crlf))
     )
+)
+
+; (time (now)) from program
+(defrule retract-time
+    (declare (salience ?*SALIENCE-LOWEST*))
+    ?f <- (time $?)
+  =>
+    (if (>= ?*LOG-LEVEL* ?*LOG-LEVEL-INFO*)
+      then
+        (facts)
+    )
+    (retract ?f)
 )

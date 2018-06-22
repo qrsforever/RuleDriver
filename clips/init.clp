@@ -22,7 +22,6 @@
 
 (load* (resolve-file globals.clp))
 (load* (resolve-file utils.clp))
-(load* (resolve-file datatime.clp))
 
 (defrule load-files
     (init)

@@ -30,12 +30,14 @@ public:
     RuleEngineCore(RuleEventHandler &handler, std::string &rootdir);
     ~RuleEngineCore();
 
-    void init();
+    void setup();
+    void start();
     void finalize();
+    Environment& driver() { return *mEnv; }
 
     void handleTimer();
-    void handleClassSync(const char *clsName, const char *buildStr);
-    void handleRuleSync(const char *ruleName, const char *ruleID, const char *buildStr);
+    void handleClassSync(const char *clsName, const char *ver, const char *buildStr);
+    void handleRuleSync(const char *ruleID, const char *ver, const char *buildStr);
     void handleInstanceAdd(const char *insName, const char *clsName);
     void handleInstanceDel(const char *insName);
     void handleInstancePut(const char *insName, const char *slot, const char *value);

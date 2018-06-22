@@ -28,13 +28,14 @@ public:
 
     bool handleMessage(Message *msg);
 
-    bool newRuleFound(std::string ruleId);
     void setServerRoot(std::string rootDir) { mServerRoot = rootDir; }
     int init();
 
     void setRuleChannel(std::shared_ptr<DataChannel> channel);
     void setDeviceChannel(std::shared_ptr<DataChannel> channel);
 
+    void callInstancePush(std::string insName, std::string slot, std::string value);
+    void callMessagePush(std::string title, std::string message);
 private:
     RuleEngineCore *mCore;
     std::string mServerRoot;

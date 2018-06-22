@@ -57,24 +57,23 @@ int RuleEngineService::init()
     mCore = new RuleEngineCore(ruleHandler(), mServerRoot);
     if (!mCore)
         return -1;
-    if (!mRuleChannel)
-        return -1;
-    if (!mDeviceChannel)
-        return -1;
+    mCore->driver().add_function(
+        "ins-push",
+        std::make_shared<Functor<void, std::string, std::string, std::string>>(
+            this,
+            &RuleEngineService::callInstancePush));
+    mCore->driver().add_function(
+        "msg-push",
+        std::make_shared<Functor<void, std::string, std::string>>(
+            this,
+            &RuleEngineService::callMessagePush));
+    mCore->start();
 
-    mCore->init();
-    mRuleChannel->init();
-    mDeviceChannel->init();
+    if (mRuleChannel)
+        mRuleChannel->init();
+    if (mDeviceChannel)
+        mDeviceChannel->init();
     return 0;
-}
-
-bool RuleEngineService::newRuleFound(std::string ruleId)
-{
-    LOGD("ruleId: %s\n", ruleId.c_str());
-    if (!mCore)
-        return false;
-
-    return true;
 }
 
 bool RuleEngineService::handleMessage(Message *msg)
@@ -120,6 +119,7 @@ bool RuleEngineService::handleMessage(Message *msg)
                 if (PT_CLASS_PAYLOAD == payload->type()) {
                     mCore->handleClassSync(
                         payload->mClsName.c_str(),
+                        payload->mVersion.c_str(),
                         payload->toString().c_str());
                 }
             }
@@ -129,8 +129,8 @@ bool RuleEngineService::handleMessage(Message *msg)
                 std::shared_ptr<RulePayload> payload(std::dynamic_pointer_cast<RulePayload>(msg->obj));
                 if (PT_RULE_PAYLOAD == payload->type()) {
                     mCore->handleRuleSync(
-                        payload->mRuleName.c_str(),
                         payload->mRuleID.c_str(),
+                        payload->mVersion.c_str(),
                         payload->toString().c_str());
                 }
             }
@@ -139,6 +139,23 @@ bool RuleEngineService::handleMessage(Message *msg)
             return false;
     }
     return false;
+}
+
+void RuleEngineService::callInstancePush(std::string insName, std::string slot, std::string value)
+{
+    if ('#' == value[0])
+        value = value.substr(1);
+    LOGD("(%s, %s, %s)\n", insName.c_str(), slot.c_str(), value.c_str());
+
+    std::shared_ptr<InstancePayload> payload = std::make_shared<InstancePayload>();
+    payload->mInsName = insName;
+    payload->mSlots.push_back(InstancePayload::SlotInfo(slot, value));
+    mDeviceChannel->send(PT_INSTANCE_PAYLOAD, payload);
+}
+
+void RuleEngineService::callMessagePush(std::string title, std::string message)
+{
+    LOGD("(%s, %s)\n", title.c_str(), message.c_str());
 }
 
 RuleEngineService& ruleEngine()

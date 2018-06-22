@@ -7,7 +7,7 @@ OPTIMIZE :=
 WARNINGS := -Wall -Wno-unused -Wno-format
 DEFS     := -DDEBUG -DUSE_SHARED_PTR
 
-PROJECT_ROOT_DIR := $(shell git worktree list | cut -d \  -f1)
+PROJECT_ROOT_DIR := $(shell dirname `git rev-parse --git-dir`)
 IS_HOMEBRAIN := $(shell git config --get remote.origin.url | grep -o smarthome)
 
 ifeq ($(IS_HOMEBRAIN), smarthome)
