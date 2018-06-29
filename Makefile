@@ -5,7 +5,7 @@
 # 其他变量
 OPTIMIZE :=
 WARNINGS := -Wall -Wno-unused -Wno-format
-DEFS     := -DDEBUG -DUSE_SHARED_PTR
+DEFS     := -DDEBUG -DUSE_SHARED_PTR -DTABLE_DEBUG
 
 PROJECT_ROOT_DIR := $(shell dirname `git rev-parse --git-dir`)
 IS_HOMEBRAIN := $(shell git config --get remote.origin.url | grep -o smarthome)
@@ -14,10 +14,12 @@ ifeq ($(IS_HOMEBRAIN), smarthome)
 	UTILS_DIR := ../../utils
 	CLIPS_DIR := $(PROJECT_ROOT_DIR)/homebrain/external/clips/core
 	CLIPS_LIB := $(PROJECT_ROOT_DIR)/out/linux/x86_64/release
+	JSON_DIR  := $(PROJECT_ROOT_DIR)/extlibs/rapidjson/rapidjson
 else
 	UTILS_DIR := ../Utils
 	CLIPS_DIR := /workspace/clips/learn/clips_core_source_630/core
 	CLIPS_LIB := $(CLIPS_DIR)
+	JSON_DIR  := /data/source/rapidjson
 endif
 
 RULEPRO_DIR := ..
@@ -26,6 +28,7 @@ PAYLOAD_DIR := ../Payload
 MISC_DIR := $(UTILS_DIR)/Misc
 MESSAGE_DIR := $(UTILS_DIR)/Message
 LOG_DIR := $(UTILS_DIR)/Log
+SQLITE_DIR := $(UTILS_DIR)/SQLite
 
 # 初始化编译工具以及编译选项
 CROSS_COMPILE =
@@ -34,17 +37,17 @@ CXX 	:= $(CROSS_COMPILE)g++
 CC		:=
 AR		:= $(CROSS_COMPILE)ar
 CFLAGS  := $(OPTIMIZE) $(WARNINGS) $(DEFS)
-CPPFLAGS:= -std=c++11 -lClipscpp -lclips -lUtils_log -lUtils_message -lUtils_misc -lpthread
-LDFLAGS := -L$(CLIPSCPP_DIR)/output -L$(CLIPS_LIB) -L$(PAYLOAD_DIR)/output -L$(MISC_DIR)/output -L$(MESSAGE_DIR)/output -L$(LOG_DIR)/output
-INCLUDE := -I$(CLIPSCPP_DIR)/src -I$(MISC_DIR)/src -I$(MESSAGE_DIR)/src -I$(LOG_DIR)/src -I$(PAYLOAD_DIR)/src
+CPPFLAGS:= -std=c++11 -lClipscpp -lclips -lRE_payload -lUtils_sqlite -lUtils_log -lUtils_message -lUtils_misc -lpthread -lsqlite3
+LDFLAGS := -L$(CLIPSCPP_DIR)/output -L$(CLIPS_LIB) -L$(PAYLOAD_DIR)/output -L$(MISC_DIR)/output -L$(MESSAGE_DIR)/output -L$(LOG_DIR)/output -L$(SQLITE_DIR)/output
+INCLUDE := -I$(JSON_DIR)/include -I$(CLIPSCPP_DIR)/src -I$(MISC_DIR)/src -I$(MESSAGE_DIR)/src -I$(LOG_DIR)/src -I$(SQLITE_DIR)/src -I$(PAYLOAD_DIR)/src
 
 # 源文件可能的后缀
 SRCEXTS := c C cc cpp CPP c++ cxx cp
 HDREXTS := h H hh hpp HPP h++ hxx hp
 
 # 指定源文件目录, 以及目标文件生成目录
-SRC_DIR = . src
-INC_DIR = . src
+SRC_DIR = . src src/tables
+INC_DIR = . src src/tables
 OUT_DIR = output
 OBJ_DIR = $(OUT_DIR)/obj
 
@@ -58,7 +61,7 @@ EXCLUDE_SRC := %UnitTest.cpp %HomeBrainMain.cpp
 # 设置目标类型(exe, a, so), 及目标名字
 TARGET_TYPE := a
 TARGET_TYPE := $(strip $(TARGET_TYPE))
-TARGET_NAME :=
+TARGET_NAME := RE_driver
 
 ifeq ($(TARGET_NAME), )
 	TARGET_NAME := $(shell basename $(PWD))

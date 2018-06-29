@@ -12,6 +12,7 @@
 #include "Environment.h"
 #include "Mutex.h"
 #include <map>
+#include <vector>
 
 #ifdef __cplusplus
 
@@ -25,22 +26,28 @@ using namespace CLIPS;
 
 class RuleEventHandler;
 
+typedef std::map<std::string, Instance::pointer> InstancesMap;
+
 class RuleEngineCore {
 public:
-    RuleEngineCore(RuleEventHandler &handler, std::string &rootdir);
+    typedef std::shared_ptr<RuleEngineCore> pointer;
+    RuleEngineCore(RuleEventHandler &handler);
     ~RuleEngineCore();
 
+    Environment& driver() { return *mEnv; }
     void setup();
     void start();
     void finalize();
-    Environment& driver() { return *mEnv; }
+    long assertRun(std::string assert);
 
-    void handleTimer();
-    void handleClassSync(const char *clsName, const char *ver, const char *buildStr);
-    void handleRuleSync(const char *ruleID, const char *ver, const char *buildStr);
+    bool handleTimer();
+    std::string handleClassSync(const char *clsName, const char *ver, const char *buildStr);
+    std::string handleRuleSync(const char *ruleName, const char *ver, const char *buildStr);
     void handleInstanceAdd(const char *insName, const char *clsName);
     void handleInstanceDel(const char *insName);
     void handleInstancePut(const char *insName, const char *slot, const char *value);
+
+    void debug(int show);
 
 private:
 
@@ -51,17 +58,14 @@ private:
 
     int _CallGetDebugLevel();
     std::string _CallGetRootDir();
-    Values _CallGetClsesFiles();
-    Values _CallGetRulesFiles();
+    Values _CallGetFiles(int fileType);
     Values _CallNow();
 
 private:
-    typedef std::map<std::string, Instance::pointer>::iterator InsesIt;
     UTILS::Mutex mEnvMutex;
-    RuleEventHandler &mHandler;
     Environment *mEnv;
-    std::string &mRootDir;
-    std::map<std::string, Instance::pointer> mInses;
+    RuleEventHandler &mHandler;
+    InstancesMap mInses;
 }; /* class RuleEngineCore */
 
 

@@ -7,9 +7,7 @@
  ****************************************************************************/
 
 #include "RuleEngineService.h"
-#include "RuleEngineCore.h"
 #include "RuleEventHandler.h"
-#include "RuleEventTypes.h"
 #include "DataChannel.h"
 #include "InstancePayload.h"
 #include "ClassPayload.h"
@@ -24,9 +22,9 @@ using namespace UTILS;
 static RuleEngineService *gRuleEngine = 0;
 
 RuleEngineService::RuleEngineService()
-    : mCore(0)
-    , mServerRoot("clips")
-    , mRuleChannel(0), mDeviceChannel(0)
+    : mServerRoot("clips")
+    , mCore(0), mStore(0)
+    , mRuleChannel(0), mClassChannel(0)
 {
     LOGTT();
 }
@@ -34,10 +32,8 @@ RuleEngineService::RuleEngineService()
 RuleEngineService::~RuleEngineService()
 {
     LOGTT();
-    if (mCore) {
-        delete mCore;
-        mCore = 0;
-    }
+    mCore.reset();
+    mStore.reset();
 }
 
 void RuleEngineService::setRuleChannel(std::shared_ptr<DataChannel> channel)
@@ -47,16 +43,20 @@ void RuleEngineService::setRuleChannel(std::shared_ptr<DataChannel> channel)
 
 void RuleEngineService::setDeviceChannel(std::shared_ptr<DataChannel> channel)
 {
-    mDeviceChannel = channel;
+    mClassChannel = channel;
 }
 
 int RuleEngineService::init()
 {
     LOGTT();
 
-    mCore = new RuleEngineCore(ruleHandler(), mServerRoot);
-    if (!mCore)
+    if (!(mStore = std::make_shared<RuleEngineStore>(ruleHandler(), mServerRoot + "/ruleengine.db")))
         return -1;
+
+    if (!(mCore = std::make_shared<RuleEngineCore>(ruleHandler())))
+        return -1;
+
+    /* install rule driver interface */
     mCore->driver().add_function(
         "ins-push",
         std::make_shared<Functor<void, std::string, std::string, std::string>>(
@@ -68,26 +68,26 @@ int RuleEngineService::init()
             this,
             &RuleEngineService::callMessagePush));
     mCore->start();
+    /* mCore->debugShow(); */
 
     if (mRuleChannel)
         mRuleChannel->init();
-    if (mDeviceChannel)
-        mDeviceChannel->init();
+    if (mClassChannel)
+        mClassChannel->init();
     return 0;
 }
 
 bool RuleEngineService::handleMessage(Message *msg)
 {
-    if (msg->what != RET_REFRESH_TIMER)
-        LOGD("msg: [%d] [%d] [%d]\n", msg->what, msg->arg1, msg->arg2);
-
     if (!mCore)
         return false;
 
+    if (msg->what == RET_REFRESH_TIMER)
+        return mCore->handleTimer();
+    else
+        LOGD("msg: [%d] [%d] [%d]\n", msg->what, msg->arg1, msg->arg2);
+
     switch(msg->what) {
-        case RET_REFRESH_TIMER:
-            mCore->handleTimer();
-            return false;
         case RET_INSTANCE_ADD:
             if (msg->obj) {
                 std::shared_ptr<InstancePayload> payload(std::dynamic_pointer_cast<InstancePayload>(msg->obj));
@@ -116,22 +116,36 @@ bool RuleEngineService::handleMessage(Message *msg)
         case RET_CLASS_SYNC:
             if (msg->obj) {
                 std::shared_ptr<ClassPayload> payload(std::dynamic_pointer_cast<ClassPayload>(msg->obj));
-                if (PT_CLASS_PAYLOAD == payload->type()) {
-                    mCore->handleClassSync(
+                if (PT_CLASS_PAYLOAD != payload->type()) {
+                    LOGW("payload type not match!\n");
+                    return false;
+                }
+                std::string path = mCore->handleClassSync(
+                    payload->mClsName.c_str(),
+                    payload->mVersion.c_str(),
+                    payload->toString().c_str());
+                if (!path.empty()) {
+                    mStore->updateClassTable(
                         payload->mClsName.c_str(),
-                        payload->mVersion.c_str(),
-                        payload->toString().c_str());
+                        payload->mVersion.c_str(), path.c_str());
                 }
             }
             return true;
         case RET_RULE_SYNC:
             if (msg->obj) {
                 std::shared_ptr<RulePayload> payload(std::dynamic_pointer_cast<RulePayload>(msg->obj));
-                if (PT_RULE_PAYLOAD == payload->type()) {
-                    mCore->handleRuleSync(
-                        payload->mRuleID.c_str(),
-                        payload->mVersion.c_str(),
-                        payload->toString().c_str());
+                if (PT_RULE_PAYLOAD != payload->type()) {
+                    LOGW("payload type not match!\n");
+                    return false;
+                }
+                std::string path = mCore->handleRuleSync(
+                    payload->mRuleName.c_str(),
+                    payload->mVersion.c_str(),
+                    payload->toString().c_str());
+                if (!path.empty()) {
+                    mStore->updateRuleTable(
+                        payload->mRuleName.c_str(),
+                        payload->mVersion.c_str(), path.c_str());
                 }
             }
             return true;
@@ -150,12 +164,22 @@ void RuleEngineService::callInstancePush(std::string insName, std::string slot, 
     std::shared_ptr<InstancePayload> payload = std::make_shared<InstancePayload>();
     payload->mInsName = insName;
     payload->mSlots.push_back(InstancePayload::SlotInfo(slot, value));
-    mDeviceChannel->send(PT_INSTANCE_PAYLOAD, payload);
+    mClassChannel->send(PT_INSTANCE_PAYLOAD, payload);
 }
 
 void RuleEngineService::callMessagePush(std::string title, std::string message)
 {
     LOGD("(%s, %s)\n", title.c_str(), message.c_str());
+}
+
+bool RuleEngineService::triggerRule(std::string ruleId)
+{
+    LOGD("ruleId: %s\n", ruleId.c_str());
+    if (!mCore)
+        return false;
+    std::string assert("");
+    assert.append("(scene ").append(ruleId).append(")");
+    return mCore->assertRun(assert) > 0 ? true : false;
 }
 
 RuleEngineService& ruleEngine()

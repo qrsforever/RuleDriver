@@ -4,31 +4,36 @@
 ;=================================================================
 
 (deffunction load-file (?file)
-	(bind ?pos (str-index "." ?file))
-	(if (neq ?pos FALSE)
-       then
+    (bind ?pos (str-index "." ?file))
+    (if (neq ?pos FALSE)
+     then
+        (bind ?slash (str-index "/" ?file))
+        (bind ?path (resolve-file ?file ?slash))
+        (if (eq ?path FALSE)
+         then
+            (return)
+        )
         (bind ?suffix (sub-string (+ ?pos 1) (length ?file) ?file))
         (switch ?suffix
             (case "clp"
              then
-                (load* (resolve-file ?file))
+                (load* ?path)
             )
             (case "bat"
              then
-                (batch* (resolve-file ?file))
+                (batch* ?path)
             )
-            (default (printout warn "Can load file: " ?file crlf))
+            (default (printout warn "Cannot load file: " ?file crlf))
         )
-	   else
-   	   	(printout warn "Cannot handle file: " ?file crlf)
-   	   	(printout warn "Can only handle .clp or .bat files!" crlf)
-	)
+     else
+        (printout warn "Only handle .clp or .bat files!" crlf)
+    )
 )
 
 (deffunction load-files ($?file-list)
     (bind ?end (length$ $?file-list))
     (loop-for-count (?n 1 ?end)
-	   do
-	   	(load-file (nth$ ?n $?file-list))
-	)
+     do
+        (load-file (nth$ ?n $?file-list))
+    )
 )

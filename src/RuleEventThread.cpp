@@ -7,6 +7,7 @@
  ****************************************************************************/
 
 #include "RuleEventThread.h"
+#include "Log.h"
 
 SINGLETON_STATIC_INSTANCE(HB::RuleEventThread)
 
@@ -20,6 +21,12 @@ RuleEventThread::RuleEventThread() : MessageLooper()
 RuleEventThread::~RuleEventThread()
 {
 
+}
+
+void RuleEventThread::run()
+{
+    LOGI("Rule EventThread:[%u]\n", id());
+    return MessageLooper::run();
 }
 
 } /* namespace HB */

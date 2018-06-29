@@ -10,16 +10,15 @@
 #define __RuleEngineService_H__
 
 #include "MessageHandler.h"
-#include <memory>
+#include "DataChannel.h"
+#include "RuleEngineStore.h"
+#include "RuleEngineCore.h"
 
 #ifdef __cplusplus
 
 using namespace UTILS;
 
 namespace HB {
-
-class DataChannel;
-class RuleEngineCore;
 
 class RuleEngineService : public MessageHandler::Callback {
 public:
@@ -29,6 +28,7 @@ public:
     bool handleMessage(Message *msg);
 
     void setServerRoot(std::string rootDir) { mServerRoot = rootDir; }
+    std::string& getServerRoot() { return mServerRoot; }
     int init();
 
     void setRuleChannel(std::shared_ptr<DataChannel> channel);
@@ -36,11 +36,17 @@ public:
 
     void callInstancePush(std::string insName, std::string slot, std::string value);
     void callMessagePush(std::string title, std::string message);
+    bool triggerRule(std::string ruleId);
+
+    RuleEngineStore::pointer store() { return mStore; }
+    RuleEngineCore::pointer core() { return mCore; }
+
 private:
-    RuleEngineCore *mCore;
     std::string mServerRoot;
-    std::shared_ptr<DataChannel> mRuleChannel;
-    std::shared_ptr<DataChannel> mDeviceChannel;
+    RuleEngineCore::pointer mCore;
+    RuleEngineStore::pointer mStore;
+    DataChannel::pointer mRuleChannel;
+    DataChannel::pointer mClassChannel;
 
 }; /* class RuleEngineService */
 

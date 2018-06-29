@@ -4,7 +4,7 @@
 ;=================================================================
 
 ;-----------------------------------------------------------------
-;	Global varible
+;    Global varible
 ;       1. Use ?*var* to access the valuea of global varible
 ;       2. Use bind function to set the value of global varible.
 ;-----------------------------------------------------------------
@@ -29,18 +29,17 @@
 )
 
 ;-----------------------------------------------------------------
-;	Global Template
+;    Global Template
 ;-----------------------------------------------------------------
 
 ;-----------------------------------------------------------------
-;	Global Class
+;    Global Class
 ;-----------------------------------------------------------------
 
 ; Base Device Abstract
 (defclass DEVICE (is-a USER) (role abstract)
     (slot ID     (visibility public) (type SYMBOL))
     (slot Class  (visibility public) (type SYMBOL) (access initialize-only))
-    (slot Parent (visibility public) (default-dynamic nil))
     (slot UUID   (visibility public) (type STRING))
     (slot insCnt (type INTEGER) (storage shared) (default 0))
 )
@@ -52,7 +51,7 @@
 )
 
 ;-----------------------------------------------------------------
-;	Global Function
+;    Global Function
 ;-----------------------------------------------------------------
 
 ; Condition => Action: trigger device control
@@ -89,16 +88,20 @@
             ; Check the ruleid exist
             (if (defrule-module ?ruleid)
               then
+                (printout debug "(act-scene " ?ruleid ")" crlf)
                 (assert (scene ?ruleid))
               else
                 (printout warn "NOT FOUND: scene:" ?ruleid crlf)
             )
         )
+     else
+        (printout debug "(act-scene " ?ruleid-list ")" crlf)
+        (assert (scene ?ruleid-list))
     )
 )
 
 ;-----------------------------------------------------------------
-;	Global Rule
+;    Global Rule
 ;-----------------------------------------------------------------
 
 ; show facts, ruels, instances and so on debug info
@@ -108,9 +111,12 @@
     (retract ?f)
     (switch ?elem
         (case instances then (instances))
-        (case facts then (facts))
-        (case rules then (rules))
-        (case agenda then (agenda))
+        (case facts     then    (facts))
+        (case rules     then    (rules))
+        (case agenda    then    (agenda))
+        (case classes   then    (list-defclasses))
+        (case globals   then    (show-defglobals))
+        (case memory    then    (printout info "Memory Used:"(/ (mem-used) 131072)" MB" crlf))
         (default (printout warn "Unkown elem: " ?elem crlf))
     )
 )

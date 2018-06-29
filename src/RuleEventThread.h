@@ -22,6 +22,7 @@ class RuleEventThread : public MessageLooper, public Singleton<RuleEventThread> 
 public:
     RuleEventThread();
     ~RuleEventThread();
+    virtual void run();
 }; /* class RuleEventThread */
 
 } /* namespace HB */

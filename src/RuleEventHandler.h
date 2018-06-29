@@ -10,6 +10,7 @@
 #define __RuleEventHandler_H__
 
 #include "MessageHandler.h"
+#include "RuleEventTypes.h"
 
 #ifdef __cplusplus
 

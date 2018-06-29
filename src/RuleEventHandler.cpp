@@ -9,6 +9,7 @@
 #include "RuleEventHandler.h"
 #include "RuleEventThread.h"
 #include "RuleEventTypes.h"
+#include "RuleEngineStore.h"
 
 #include "Log.h"
 #include "Message.h"
@@ -39,6 +40,12 @@ void RuleEventHandler::handleMessage(Message *msg)
     switch(msg->what) {
         case RET_REFRESH_TIMER:
             sendEmptyMessageDelayed(RET_REFRESH_TIMER, 1000);
+            break;
+        case RET_STORE_CLOSE:
+            if (msg->obj) {
+                std::shared_ptr<RuleEngineStore> store(std::dynamic_pointer_cast<RuleEngineStore>(msg->obj));
+                store->close();
+            }
             break;
         default:
             break;
