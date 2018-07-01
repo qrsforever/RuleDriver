@@ -34,8 +34,9 @@ public:
     void setRuleChannel(std::shared_ptr<DataChannel> channel);
     void setDeviceChannel(std::shared_ptr<DataChannel> channel);
 
-    void callInstancePush(std::string insName, std::string slot, std::string value);
-    void callMessagePush(std::string title, std::string message);
+    bool callMessagePush(std::string title, std::string message);
+    bool callInstancePush(std::string insName, std::string slot, std::string value);
+    bool callContentPush(std::string id, std::string title, std::string content);
     bool triggerRule(std::string ruleId);
 
     RuleEngineStore::pointer store() { return mStore; }

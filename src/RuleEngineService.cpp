@@ -59,14 +59,14 @@ int RuleEngineService::init()
     /* install rule driver interface */
     mCore->driver().add_function(
         "ins-push",
-        std::make_shared<Functor<void, std::string, std::string, std::string>>(
+        std::make_shared<Functor<bool, std::string, std::string, std::string>>(
             this,
             &RuleEngineService::callInstancePush));
     mCore->driver().add_function(
-        "msg-push",
-        std::make_shared<Functor<void, std::string, std::string>>(
+        "txt-push",
+        std::make_shared<Functor<bool, std::string, std::string, std::string>>(
             this,
-            &RuleEngineService::callMessagePush));
+            &RuleEngineService::callContentPush));
     mCore->start();
     /* mCore->debugShow(); */
 
@@ -155,7 +155,13 @@ bool RuleEngineService::handleMessage(Message *msg)
     return false;
 }
 
-void RuleEngineService::callInstancePush(std::string insName, std::string slot, std::string value)
+bool RuleEngineService::callMessagePush(std::string title, std::string message)
+{
+    LOGD("(%s, %s)\n", title.c_str(), message.c_str());
+    return false;
+}
+
+bool RuleEngineService::callInstancePush(std::string insName, std::string slot, std::string value)
 {
     if ('#' == value[0])
         value = value.substr(1);
@@ -164,12 +170,13 @@ void RuleEngineService::callInstancePush(std::string insName, std::string slot, 
     std::shared_ptr<InstancePayload> payload = std::make_shared<InstancePayload>();
     payload->mInsName = insName;
     payload->mSlots.push_back(InstancePayload::SlotInfo(slot, value));
-    mClassChannel->send(PT_INSTANCE_PAYLOAD, payload);
+    return mClassChannel->send(PT_INSTANCE_PAYLOAD, payload);
 }
 
-void RuleEngineService::callMessagePush(std::string title, std::string message)
+bool RuleEngineService::callContentPush(std::string id, std::string title, std::string content)
 {
-    LOGD("(%s, %s)\n", title.c_str(), message.c_str());
+    LOGD("(%s, %s, %s)\n", id.c_str(), title.c_str(), content.c_str());
+    return true;
 }
 
 bool RuleEngineService::triggerRule(std::string ruleId)

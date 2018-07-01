@@ -171,7 +171,7 @@ bool RuleEngineCore::handleTimer()
 {
     Mutex::Autolock _l(&mEnvMutex);
 
-    assertRun("(time (now))");
+    assertRun("(datetime (now))");
 
     /* false: again periodicly */
     return false;
@@ -352,13 +352,14 @@ Values RuleEngineCore::_CallNow()
     SysTime::DateTime dt;
     SysTime::GetDateTime(&dt);
     Values rv;
+    rv.push_back(SysTime::GetMSecs()); /* clock time */
     rv.push_back(dt.mYear);
     rv.push_back(dt.mMonth);
-    /* rv.push_back(dt.mDayOfWeek); */
     rv.push_back(dt.mDay);
     rv.push_back(dt.mHour);
     rv.push_back(dt.mMinute);
     rv.push_back(dt.mSecond);
+    rv.push_back(dt.mDayOfWeek); /* week day */
     return rv;
 }
 } /* namespace HB */

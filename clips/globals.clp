@@ -5,7 +5,7 @@
 
 ;-----------------------------------------------------------------
 ;    Global varible
-;       1. Use ?*var* to access the valuea of global varible
+;       1. Use ?*var* to access the value of global varible
 ;       2. Use bind function to set the value of global varible.
 ;-----------------------------------------------------------------
 
@@ -29,12 +29,23 @@
 )
 
 ;-----------------------------------------------------------------
-;    Global Template
+;   Global Template
 ;-----------------------------------------------------------------
 
 ;-----------------------------------------------------------------
 ;    Global Class
 ;-----------------------------------------------------------------
+
+; Rule Context
+(defclass RuleContext (is-a USER) (role concrete)
+    (slot rule-id (type STRING))
+    (slot start-time (type INTEGER) (default-dynamic (nth$ 1 (now))))
+    (slot end-time (type INTEGER))
+)
+
+(defmessage-handler RuleContext init after (?timeout)
+    (bind ?self:end-time (+ ?self:start_time ?timeout))
+)
 
 ; Base Device Abstract
 (defclass DEVICE (is-a USER) (role abstract)
@@ -48,56 +59,6 @@
     (bind ?self:ID (instance-name-to-symbol (instance-name ?self)))
     (bind ?self:Class (class ?self))
     (bind ?self:insCnt (+ ?self:insCnt 1))
-)
-
-;-----------------------------------------------------------------
-;    Global Function
-;-----------------------------------------------------------------
-
-; Condition => Action: trigger device control
-(deffunction act-control (?id ?slot ?value)
-    (if (instance-existp ?id)
-     then
-        (if (numberp ?value)
-         then
-            (bind ?value (str-cat # ?value))
-        )
-        (printout debug "device control(" ?id ", " ?slot ", " ?value ")" crlf)
-        (ins-push ?id ?slot ?value)
-     else
-        (printout warn "NOT FOUND: " ?id " instance" crlf)
-    )
-)
-
-; Condition => Action: trigger message notify
-(deffunction act-notify (?title ?message)
-    (if (and (lexemep ?title) (lexemep ?message))
-     then
-        (printout debug "act_notify(" ?title ", " ?message ")" crlf)
-        (msg-push ?title ?message)
-     else
-        (printout warn "Parameters is invalid: (" ?title ", " ?message ")" crlf)
-    )
-)
-
-; Condition => Action: trigger scene list
-(deffunction act-scene (?type $?ruleid-list)
-    (if (eq ?type list)
-     then
-        (foreach ?ruleid (create$ $?ruleid-list)
-            ; Check the ruleid exist
-            (if (defrule-module ?ruleid)
-              then
-                (printout debug "(act-scene " ?ruleid ")" crlf)
-                (assert (scene ?ruleid))
-              else
-                (printout warn "NOT FOUND: scene:" ?ruleid crlf)
-            )
-        )
-     else
-        (printout debug "(act-scene " ?ruleid-list ")" crlf)
-        (assert (scene ?ruleid-list))
-    )
 )
 
 ;-----------------------------------------------------------------
@@ -121,14 +82,43 @@
     )
 )
 
-; (time (now)) from program
-(defrule retract-time
+; (datetime (now)) from program
+(defrule retract-datetime
     (declare (salience ?*SALIENCE-LOWEST*))
-    ?f <- (time $?)
+    ?f <- (datetime $?)
   =>
-    (if (>= ?*LOG-LEVEL* ?*LOG-LEVEL-INFO*)
+    (if (>= ?*LOG-LEVEL* ?*LOG-LEVEL-TRACE*)
       then
         (facts)
     )
     (retract ?f)
+)
+
+; delete one rule in clp script when (assert (delete-rule ruleid-1 ruleid-2))
+(defrule delete-rule
+    ?f <- (delete-rule $?ruleid-list)
+  =>
+    (retract ?f)
+    (foreach ?ruleid (create$ $?ruleid-list)
+        (if (defrule-module ?ruleid)
+         then
+            (undefrule ?ruleid)
+        )
+    )
+)
+
+; check rule response with timeout
+(defrule check-rule-timeout-try
+    (datetime ?clock $?other)
+    ?obj <- (object (is-a RuleContext) (end-time ?end &:(< ?end ?clock)))
+  =>
+   ; (bind ?count (send ?obj get-try-count))
+   ; (if (> ?count 0)
+   ;  then
+   ;     (printout t "[" ?obj "].trycount:" ?count crlf)
+   ;     (send ?obj put-try-count (- ?count 1))
+   ;  else
+   ;     (printout t "[" ?obj "]: delete!" crlf)
+   ;     (unmake-instance ?obj)
+   ; )
 )

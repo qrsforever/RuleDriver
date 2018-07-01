@@ -6,14 +6,15 @@
 (defglobal
     ?*LOG-LEVEL* = (get-debug-level)
     ?*ROOT-DIR* = (get-root-dir)
-    ?*CLIPS_DIRS* = (create$ classes rules temlates)
+    ?*CLIPS-DIRS* = (create$ classes rules temlates)
+    ?*TEST-CASE* = TRUE
     ?*START-TIME* = (now)
 )
 
 (deffunction resolve-file (?file ?ispath)
     (if (eq ?ispath FALSE)
      then
-        (foreach ?d ?*CLIPS_DIRS*
+        (foreach ?d ?*CLIPS-DIRS*
             (bind ?path (str-cat ?*ROOT-DIR* "/" ?d "/" ?file))
             (if (open ?path fd)
              then
@@ -53,7 +54,13 @@
     (init)
     (load-finished)
   =>
+    ; Simulate Test Case
     (reset)
+    (if ?*TEST-CASE*
+     then
+        (batch* (str-cat ?*ROOT-DIR* "/" testcase.clp))
+        (assert (test-suite init))
+    )
     (if (>= ?*LOG-LEVEL* ?*LOG-LEVEL-TRACE*)
      then
         (printout trace crlf ">>>>>> list globals:" crlf)
@@ -62,6 +69,8 @@
         (list-defclasses)
         (printout trace crlf ">>>>>> list defrules:" crlf)
         (list-defrules)
+        (printout trace crlf ">>>>>> list deffunctions:" crlf)
+        (list-deffunctions)
         (printout trace crlf)
     )
     (seed (integer (time)))
