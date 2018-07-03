@@ -58,6 +58,11 @@ int RuleEngineService::init()
 
     /* install rule driver interface */
     mCore->driver().add_function(
+        "msg-push",
+        std::make_shared<Functor<bool, int, int, std::string, std::string>>(
+            this,
+            &RuleEngineService::callMessagePush));
+    mCore->driver().add_function(
         "ins-push",
         std::make_shared<Functor<bool, std::string, std::string, std::string>>(
             this,
@@ -155,9 +160,9 @@ bool RuleEngineService::handleMessage(Message *msg)
     return false;
 }
 
-bool RuleEngineService::callMessagePush(std::string title, std::string message)
+bool RuleEngineService::callMessagePush(int what, int arg1, std::string arg2, std::string message)
 {
-    LOGD("(%s, %s)\n", title.c_str(), message.c_str());
+    LOGD("(%d, %d, %s, %s)\n", what, arg1, arg2.c_str(), message.c_str());
     return false;
 }
 
@@ -170,13 +175,14 @@ bool RuleEngineService::callInstancePush(std::string insName, std::string slot, 
     std::shared_ptr<InstancePayload> payload = std::make_shared<InstancePayload>();
     payload->mInsName = insName;
     payload->mSlots.push_back(InstancePayload::SlotInfo(slot, value));
-    return mClassChannel->send(PT_INSTANCE_PAYLOAD, payload);
+    mClassChannel->send(PT_INSTANCE_PAYLOAD, payload);
+    return false; /* asynchronous */
 }
 
 bool RuleEngineService::callContentPush(std::string id, std::string title, std::string content)
 {
     LOGD("(%s, %s, %s)\n", id.c_str(), title.c_str(), content.c_str());
-    return true;
+    return true; /* synchronous */
 }
 
 bool RuleEngineService::triggerRule(std::string ruleId)
@@ -186,7 +192,9 @@ bool RuleEngineService::triggerRule(std::string ruleId)
         return false;
     std::string assert("");
     assert.append("(scene ").append(ruleId).append(")");
-    return mCore->assertRun(assert) > 0 ? true : false;
+    int count = mCore->assertRun(assert);
+    LOGD("count --------> %d\n", count);
+    return count > 0 ? true : false;
 }
 
 RuleEngineService& ruleEngine()

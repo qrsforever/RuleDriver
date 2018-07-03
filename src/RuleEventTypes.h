@@ -18,6 +18,9 @@
 #define RET_STORE_CLOSE   7           /* Rule Event Type: close store database */
 
 
+/****************
+*  Rule Debug   *
+****************/
 #define DEBUG_SHOW_ALL          0
 #define DEBUG_SHOW_CLASSES      1
 #define DEBUG_SHOW_RULES        2
@@ -25,3 +28,8 @@
 #define DEBUG_SHOW_FACTS        4
 #define DEBUG_SHOW_AGENDA       5
 #define DEBUG_SHOW_MEMORY       6
+
+/*****************
+*  Rule Script   *
+*****************/
+#define MSG_RULE_RESPONSE   1  /* Rule Message What: must be consistent with clp script */

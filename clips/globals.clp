@@ -28,24 +28,22 @@
     ?*LOG-LEVEL-TRACE*      = 5
 )
 
+; varibles: rule engine
+(defglobal
+    ?*RULE-TIMEOUT-MS*      = 5000
+    ?*RULE-RETRY-COUNT*     = 1
+)
+
 ;-----------------------------------------------------------------
 ;   Global Template
 ;-----------------------------------------------------------------
+
 
 ;-----------------------------------------------------------------
 ;    Global Class
 ;-----------------------------------------------------------------
 
-; Rule Context
-(defclass RuleContext (is-a USER) (role concrete)
-    (slot rule-id (type STRING))
-    (slot start-time (type INTEGER) (default-dynamic (nth$ 1 (now))))
-    (slot end-time (type INTEGER))
-)
-
-(defmessage-handler RuleContext init after (?timeout)
-    (bind ?self:end-time (+ ?self:start_time ?timeout))
-)
+(defclass Context (is-a USER))
 
 ; Base Device Abstract
 (defclass DEVICE (is-a USER) (role abstract)
@@ -94,31 +92,10 @@
     (retract ?f)
 )
 
-; delete one rule in clp script when (assert (delete-rule ruleid-1 ruleid-2))
-(defrule delete-rule
-    ?f <- (delete-rule $?ruleid-list)
+; retract fact: (action-reponse id value)
+(defrule retract-rule-response
+    (declare (salience ?*SALIENCE-LOWEST*))
+    ?f <- (rule-response ?id $?)
   =>
     (retract ?f)
-    (foreach ?ruleid (create$ $?ruleid-list)
-        (if (defrule-module ?ruleid)
-         then
-            (undefrule ?ruleid)
-        )
-    )
-)
-
-; check rule response with timeout
-(defrule check-rule-timeout-try
-    (datetime ?clock $?other)
-    ?obj <- (object (is-a RuleContext) (end-time ?end &:(< ?end ?clock)))
-  =>
-   ; (bind ?count (send ?obj get-try-count))
-   ; (if (> ?count 0)
-   ;  then
-   ;     (printout t "[" ?obj "].trycount:" ?count crlf)
-   ;     (send ?obj put-try-count (- ?count 1))
-   ;  else
-   ;     (printout t "[" ?obj "]: delete!" crlf)
-   ;     (unmake-instance ?obj)
-   ; )
 )

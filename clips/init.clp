@@ -7,7 +7,7 @@
     ?*LOG-LEVEL* = (get-debug-level)
     ?*ROOT-DIR* = (get-root-dir)
     ?*CLIPS-DIRS* = (create$ classes rules temlates)
-    ?*TEST-CASE* = TRUE
+    ?*TEST-CASE* = FALSE
     ?*START-TIME* = (now)
 )
 
@@ -35,6 +35,7 @@
 
 (load* (str-cat ?*ROOT-DIR* "/" globals.clp))
 (load* (str-cat ?*ROOT-DIR* "/" utils.clp))
+(load* (str-cat ?*ROOT-DIR* "/" context.clp))
 
 (defrule load-files
     (init)

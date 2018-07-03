@@ -78,7 +78,8 @@ void RuleEngineCore::setup()
         "  ?*VERSION-MAJOR* = %u\n"
         "  ?*VERSION-MINOR* = %u\n"
         "  ?*VERSION-MICRO* = %u\n"
-        ")\n", HB_VERSION_MAJOR, HB_VERSION_MINOR, HB_VERSION_MICRO);
+        "  ?*MSG-RULE-RESPONSE* = %d\n"
+        ")\n", HB_VERSION_MAJOR, HB_VERSION_MINOR, HB_VERSION_MICRO, MSG_RULE_RESPONSE);
     mEnv->build(data);
 
     /* regist [clear, periodic, reset, rulefiring] callback */
