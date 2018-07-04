@@ -193,7 +193,6 @@ bool RuleEngineService::triggerRule(std::string ruleId)
     std::string assert("");
     assert.append("(scene ").append(ruleId).append(")");
     int count = mCore->assertRun(assert);
-    LOGD("count --------> %d\n", count);
     return count > 0 ? true : false;
 }
 

@@ -10,10 +10,8 @@
     (slot retry-count (type INTEGER) (default ?*RULE-RETRY-COUNT*))
     (slot current-try (type INTEGER) (default 0))
     (slot start-time (type INTEGER) (default-dynamic (nth$ 1 (now))))
-    (slot act-all-count (type INTEGER) (access initialize-only))
     (multislot unanswer-list (type STRING))
-    ; (multislot act-sucesses (type STRING))
-    (multislot answer-rules (type SYMBOL))
+    (multislot response-rules (type SYMBOL))
 )
 
 (defmessage-handler RuleContext init after ()
@@ -24,7 +22,7 @@
     (foreach ?act (create$ ?self:unanswer-list)
         (logi "unanswer actions: " ?act)
     )
-    (foreach ?rul (create$ ?self:answer-rules)
+    (foreach ?rul (create$ ?self:response-rules)
         (logi "undefrule: " ?rul)
         (undefrule ?rul)
     )
@@ -78,27 +76,27 @@
                     (format nil " action-success \"%s\")"  ?action-str)
                    ))
 
-        (bind ?pos (member$ ?rulname ?self:answer-rules))
+        (bind ?pos (member$ ?rulname ?self:response-rules))
         (if (eq ?pos FALSE)
          then
-            (slot-direct-insert$ unanswer-list 1 ?action-str)
-            (bind ?clsname (class (symbol-to-instance-name ?id)))
-            (bind ?LHS (str-cat (format nil "(object (is-a %s)" ?clsname)
-                        (format nil " (ID ?id &:(eq ?id %s))" ?id)
-                        (format nil " (%s ?v &:(eq ?v %s)))" ?slot ?value)
-                       ))
-            (if (make-rule ?rulname ?*SALIENCE-HIGH* ?LHS ?RHS)
+            (logd "act_control(" ?id ", " ?slot ", " ?value ")")
+            (if (neq (ins-push ?id ?slot ?value) TRUE)
              then
-                (logi "make rule[" ?rulname "] ok!")
-                (slot-direct-insert$ answer-rules 1 ?rulname)
-             else
-                (loge "make rule[" ?rulname "] error!")
+                ; (eval ?RHS)
+                (slot-direct-insert$ unanswer-list 1 ?action-str)
+                (bind ?clsname (class (symbol-to-instance-name ?id)))
+                (bind ?LHS (str-cat (format nil "(object (is-a %s)" ?clsname)
+                            (format nil " (ID ?id &:(eq ?id %s))" ?id)
+                            (format nil " (%s ?v &:(eq ?v %s)))" ?slot ?value)
+                           ))
+                (if (make-rule ?rulname ?*SALIENCE-HIGH* ?LHS ?RHS)
+                 then
+                    (logi "make rule[" ?rulname "] ok!")
+                    (slot-direct-insert$ response-rules 1 ?rulname)
+                 else
+                    (loge "make rule[" ?rulname "] error!")
+                )
             )
-        )
-        (logd "act_control(" ?id ", " ?slot ", " ?value ")")
-        (if (eq (ins-push ?id ?slot ?value) TRUE)
-         then
-            (eval ?RHS)
         )
      else
         (logw "NOT FOUND: " ?id " instance")
@@ -116,24 +114,23 @@
         (bind ?action-str (implode$ (create$ ?id ?title ?content)))
         (bind ?RHS (str-cat "(send [" (instance-name ?self) "] action-success \"" (escape-quote ?action-str) "\")"))
 
-        (bind ?pos (member$ ?rulname ?self:answer-rules))
+        (bind ?pos (member$ ?rulname ?self:response-rules))
         (if (eq ?pos FALSE)
          then
-            (slot-direct-insert$ unanswer-list 1 ?action-str)
-            (bind ?LHS (str-cat "(rule-response "?id" success)"))
-            (if (make-rule ?rulname ?*SALIENCE-HIGH* ?LHS ?RHS)
+            (logd "act_notify(" ?id ", " ?title ", " ?content ")")
+            (if (neq (txt-push ?id ?title ?content) TRUE)
              then
-                (logi "make rule[" ?rulname "] ok!")
-                (slot-direct-insert$ answer-rules 1 ?rulname)
-             else
-                (logi "make rule[" ?rulname "] error!")
+                ; (eval ?RHS)
+                (slot-direct-insert$ unanswer-list 1 ?action-str)
+                (bind ?LHS (str-cat "(rule-response "?id" success)"))
+                (if (make-rule ?rulname ?*SALIENCE-HIGH* ?LHS ?RHS)
+                 then
+                    (logi "make rule[" ?rulname "] ok!")
+                    (slot-direct-insert$ response-rules 1 ?rulname)
+                 else
+                    (logi "make rule[" ?rulname "] error!")
+                )
             )
-        )
-        (logd "act_notify(" ?id ", " ?title ", " ?content ")")
-        (if (eq (txt-push ?id ?title ?content) TRUE)
-         then
-            (logd "eval " ?RHS)
-            (eval ?RHS)
         )
      else
         (logw "Parameters is invalid: (" ?id ", " ?title ", " ?content ")")
@@ -151,7 +148,7 @@
             (bind ?rulname (sym-cat "_"?self:rule-id"-response-" ?ruleid))
             (bind ?action-str (str-cat "act-scene "?ruleid))
             (bind ?RHS (str-cat "(send [" (instance-name ?self) "] action-success \"" (escape-quote ?action-str) "\")"))
-            (bind ?pos (member$ ?rulname ?self:answer-rules))
+            (bind ?pos (member$ ?rulname ?self:response-rules))
             (if (eq ?pos FALSE)
              then
                 (slot-direct-insert$ unanswer-list 1 ?action-str)
@@ -159,7 +156,7 @@
                 (if (make-rule ?rulname ?*SALIENCE-HIGH* ?LHS ?RHS)
                  then
                     (logi "make rule[" ?rulname "] ok!")
-                    (slot-direct-insert$ answer-rules 1 ?rulname)
+                    (slot-direct-insert$ response-rules 1 ?rulname)
                  else
                     (logi "make rule[" ?rulname "] error!")
                 )
