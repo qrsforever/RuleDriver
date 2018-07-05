@@ -12,6 +12,7 @@
 #include "InstancePayload.h"
 #include "ClassPayload.h"
 #include "RulePayload.h"
+#include "StringData.h"
 #include "Message.h"
 #include "Log.h"
 
@@ -154,6 +155,14 @@ bool RuleEngineService::handleMessage(Message *msg)
                 }
             }
             return true;
+        case RET_TRIGGER_RULE:
+            if (msg->obj) {
+                std::shared_ptr<StringData> assert(std::dynamic_pointer_cast<StringData>(msg->obj));
+                int count = mCore->assertRun(assert->getData());
+                if (count > 0)
+                    LOGD("trigger rule agenda [%d]\n", count);
+            }
+            return true;
         default:
             return false;
     }
@@ -182,7 +191,7 @@ bool RuleEngineService::callInstancePush(std::string insName, std::string slot, 
 bool RuleEngineService::callContentPush(std::string id, std::string title, std::string content)
 {
     LOGD("(%s, %s, %s)\n", id.c_str(), title.c_str(), content.c_str());
-    return true; /* synchronous */
+    return false; /* synchronous */
 }
 
 bool RuleEngineService::triggerRule(std::string ruleId)
@@ -192,8 +201,8 @@ bool RuleEngineService::triggerRule(std::string ruleId)
         return false;
     std::string assert("");
     assert.append("(scene ").append(ruleId).append(")");
-    int count = mCore->assertRun(assert);
-    return count > 0 ? true : false;
+    std::shared_ptr<StringData> data = std::make_shared<StringData>(assert.c_str());
+    return ruleHandler().sendMessage(ruleHandler().obtainMessage(RET_TRIGGER_RULE, data));
 }
 
 RuleEngineService& ruleEngine()

@@ -30,6 +30,7 @@
 )
 
 (defmessage-handler RuleContext try-again(?clock)
+    (logd ?self:rule-id " try " ?self:current-try "/" ?self:retry-count)
     (if (= ?self:current-try ?self:retry-count)
      then
         (return FALSE)
@@ -39,6 +40,7 @@
         (bind ?funcall (explode$ ?act))
         (bind ?cmd (nth$ 1 ?funcall))
         (bind $?args (rest$ ?funcall))
+        (logd "run " ?funcall " again.")
         (send ?self ?cmd (expand$ $?args))
     )
     (bind ?self:start-time ?clock)
@@ -79,7 +81,7 @@
         (bind ?pos (member$ ?rulname ?self:response-rules))
         (if (eq ?pos FALSE)
          then
-            (logd "act_control(" ?id ", " ?slot ", " ?value ")")
+            (logd "act-control(" ?id ", " ?slot ", " ?value ")")
             (if (neq (ins-push ?id ?slot ?value) TRUE)
              then
                 ; (eval ?RHS)
@@ -111,13 +113,13 @@
     (if (and (stringp ?title) (stringp ?content))
      then
         (bind ?rulname (sym-cat "_"?self:rule-id"-response-" ?id))
-        (bind ?action-str (implode$ (create$ ?id ?title ?content)))
+        (bind ?action-str (implode$ (create$ act-notify ?id ?title ?content)))
         (bind ?RHS (str-cat "(send [" (instance-name ?self) "] action-success \"" (escape-quote ?action-str) "\")"))
 
         (bind ?pos (member$ ?rulname ?self:response-rules))
         (if (eq ?pos FALSE)
          then
-            (logd "act_notify(" ?id ", " ?title ", " ?content ")")
+            (logd "act-notify(" ?id ", " ?title ", " ?content ")")
             (if (neq (txt-push ?id ?title ?content) TRUE)
              then
                 ; (eval ?RHS)
@@ -151,6 +153,8 @@
             (bind ?pos (member$ ?rulname ?self:response-rules))
             (if (eq ?pos FALSE)
              then
+                (logd "(act-scene " ?ruleid ")")
+                (assert (scene ?ruleid))
                 (slot-direct-insert$ unanswer-list 1 ?action-str)
                 (bind ?LHS (str-cat "(rule-response "?ruleid" success)"))
                 (if (make-rule ?rulname ?*SALIENCE-HIGH* ?LHS ?RHS)
@@ -161,8 +165,6 @@
                     (logi "make rule[" ?rulname "] error!")
                 )
             )
-            (logd "(act-scene " ?ruleid ")")
-            (assert (scene ?ruleid))
         else
             (logw "NOT FOUND: scene:" ?ruleid)
         )
@@ -172,6 +174,7 @@
 (deffunction create-rule-context (?rule-id $?args)
     (if (instance-existp ?rule-id)
      then
+        (logw "create-rule-context, already existp " ?rule-id)
         (return FALSE)
     )
     (bind ?timeout (nth$ 1 $?args))
@@ -202,21 +205,19 @@
   =>
     (if (= (send ?obj unanswer-count) 0)
      then
-        (logi "rule[" ?rule-id "] exec success!")
         (assert (rule-response ?rule-id success))
-        (send-message ?*MSG-RULE-RESPONSE* 0)
+        (send-message ?*MSG-RULE-RESPONSE* ?rule-id success)
      else
         (if (send ?obj is-timeout ?clock)
          then
             ; check retry again
             (if (send ?obj try-again ?clock)
              then
-                (logw "rule[" ?rule-id "] exec timeout, try again.")
+                (logw ?rule-id "] exec timeout, try again.")
                 (return)
              else
-                (logw "rule[" ?rule-id "] exec timeout.")
                 (assert (rule-response ?rule-id fail))
-                (send-message ?*MSG-RULE-RESPONSE* -1)
+                (send-message ?*MSG-RULE-RESPONSE* ?rule-id timeout)
             )
          else
             ; not timeout, continue

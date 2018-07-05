@@ -30,8 +30,8 @@
 
 ; varibles: rule engine
 (defglobal
-    ?*RULE-TIMEOUT-MS*      = 5000
-    ?*RULE-RETRY-COUNT*     = 1
+    ?*RULE-TIMEOUT-MS*      = 3000
+    ?*RULE-RETRY-COUNT*     = 3
 )
 
 ;-----------------------------------------------------------------

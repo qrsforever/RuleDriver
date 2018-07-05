@@ -9,13 +9,14 @@
 /****************
 *  Rule Event  *
 ****************/
-#define RET_REFRESH_TIMER 1           /* Rule Event Type: refresh timer */
-#define RET_INSTANCE_ADD  2           /* Rule Event Type: device online */
-#define RET_INSTANCE_DEL  3           /* Rule Event Type: device offline */
-#define RET_INSTANCE_PUT  4           /* Rule Event Type: device put attr */
-#define RET_RULE_SYNC     5           /* Rule Event Type: rule sync from cloud */
-#define RET_CLASS_SYNC    6           /* Rule Event Type: class profile sync */
-#define RET_STORE_CLOSE   7           /* Rule Event Type: close store database */
+#define RET_REFRESH_TIMER       1           /* Rule Event Type: refresh timer */
+#define RET_INSTANCE_ADD        2           /* Rule Event Type: device online */
+#define RET_INSTANCE_DEL        3           /* Rule Event Type: device offline */
+#define RET_INSTANCE_PUT        4           /* Rule Event Type: device put attr */
+#define RET_RULE_SYNC           5           /* Rule Event Type: rule sync from cloud */
+#define RET_CLASS_SYNC          6           /* Rule Event Type: class profile sync */
+#define RET_STORE_CLOSE         7           /* Rule Event Type: close store database */
+#define RET_TRIGGER_RULE        0           /* Rule Event Type: trigger one rule by manually*/
 
 
 /****************
