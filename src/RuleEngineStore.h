@@ -27,7 +27,7 @@ class RuleEngineStore : public ::UTILS::Object
                         , public std::enable_shared_from_this<RuleEngineStore> {
 public:
     typedef std::shared_ptr<RuleEngineStore> pointer;
-    RuleEngineStore(RuleEventHandler &hander, const std::string db);
+    RuleEngineStore(const std::string db);
     ~RuleEngineStore();
 
     bool isOpen() { return mDB != 0; }
@@ -38,14 +38,14 @@ public:
     bool updateClassTable(const char *clsName, const char *version, const char *fileName);
     bool updateRuleTable(const char *ruleName, const char *version, const char *fileName);
 
-    std::vector<std::string> queryTemplateFilePaths();
-    std::vector<std::string> queryClassFilePaths();
-    std::vector<std::string> queryRuleFilePaths();
+    std::vector<std::string> queryTemplateFilePaths(bool urgent = false);
+    std::vector<std::string> queryClassFilePaths(bool urgent = false);
+    std::vector<std::string> queryRuleFilePaths(bool urgent = false);
 
 private:
     DefTable* _GetTable(TableType type);
     bool _UpdateDefTable(DefTable *table, const char *defName, const char *version, const char *fileName);
-    std::vector<std::string> _QueryDefFilePaths(DefTable *table);
+    std::vector<std::string> _QueryDefFilePaths(DefTable *table, bool urgent);
 
 private:
     RuleEventHandler &mHandler;

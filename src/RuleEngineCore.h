@@ -27,6 +27,17 @@ using namespace CLIPS;
 class RuleEventHandler;
 
 typedef std::map<std::string, Instance::pointer> InstancesMap;
+typedef std::map<std::string, Rule::pointer> RulesMap;
+
+typedef Functor<bool, int, int, std::string, std::string> MsgPushCall;
+typedef Functor<bool, std::string, std::string, std::string> InsPushCall;
+typedef Functor<bool, std::string, std::string, std::string> TxtPushCall;
+
+typedef std::shared_ptr<MsgPushCall> MsgPushPointer;
+typedef std::shared_ptr<InsPushCall> InsPushPointer;
+typedef std::shared_ptr<TxtPushCall> TxtPushPointer;
+
+typedef std::function<std::vector<std::string>(int type)> GetFilesCallback;
 
 class RuleEngineCore {
 public:
@@ -35,17 +46,21 @@ public:
     ~RuleEngineCore();
 
     Environment& driver() { return *mEnv; }
-    void setup();
-    void start();
+    void setup(MsgPushPointer msgcall, InsPushPointer inscall, TxtPushPointer txtcall);
+    void start(std::string &rootDir, GetFilesCallback callback);
     void finalize();
     long assertRun(std::string assert);
 
     bool handleTimer();
     std::string handleClassSync(const char *clsName, const char *ver, const char *buildStr);
     std::string handleRuleSync(const char *ruleName, const char *ver, const char *buildStr);
-    void handleInstanceAdd(const char *insName, const char *clsName);
-    void handleInstanceDel(const char *insName);
-    void handleInstancePut(const char *insName, const char *slot, const char *value);
+    bool handleInstanceAdd(const char *insName, const char *clsName);
+    bool handleInstanceDel(const char *insName);
+    bool handleInstancePut(const char *insName, const char *slot, const char *value);
+
+    bool handleRuleAdd(const char *rulName);
+    bool handleRuleDel(const char *rulName);
+    bool refreshRule(const char *rulName);
 
     void debug(int show);
 
@@ -60,12 +75,16 @@ private:
     std::string _CallGetRootDir();
     Values _CallGetFiles(int fileType);
     Values _CallNow();
+    void _CallInitFinished();
 
 private:
     UTILS::Mutex mEnvMutex;
     Environment *mEnv;
     RuleEventHandler &mHandler;
     InstancesMap mInses;
+    RulesMap mRules;
+    std::string mRootDir;
+    GetFilesCallback mGetFilesCB;
 }; /* class RuleEngineCore */
 
 

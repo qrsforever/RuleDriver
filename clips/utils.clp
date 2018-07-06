@@ -141,7 +141,7 @@
     (msg-push ?what ?arg1 "nil" "nil")
 )
 
-(defmethod send-message ((?what INTEGER) (?arg1 INTEGER) (?message SYMBOL))
+(defmethod send-message ((?what INTEGER) (?arg1 INTEGER) (?message STRING))
     (msg-push ?what ?arg1 "nil" ?message)
 )
 
@@ -149,11 +149,11 @@
     (msg-push ?what 0 ?arg2 "nil")
 )
 
-(defmethod send-message ((?what INTEGER) (?arg2 SYMBOL) (?message SYMBOL))
+(defmethod send-message ((?what INTEGER) (?arg2 SYMBOL) (?message STRING))
     (msg-push ?what 0 ?arg2 ?message)
 )
 
-(defmethod send-message ((?what INTEGER) (?arg1 INTEGER) (?arg2 SYMBOL) (?message SYMBOL))
+(defmethod send-message ((?what INTEGER) (?arg1 INTEGER) (?arg2 SYMBOL) (?message STRING))
     (msg-push ?what ?arg1 ?arg2 ?message)
 )
 

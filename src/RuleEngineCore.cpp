@@ -16,10 +16,6 @@
 #include<fstream>
 #include <sstream>
 
-#define TEMLS_SEARCH_DIR "templates/"
-#define CLSES_SEARCH_DIR "classes/"
-#define RULES_SEARCH_DIR "rules/"
-
 #define SHOW_VALUE(item, tok) \
     do { \
         switch (item.type()) { \
@@ -52,7 +48,6 @@ RuleEngineCore::RuleEngineCore(RuleEventHandler &handler)
     , mHandler(handler)
 {
     LOGTT();
-    setup();
 }
 
 RuleEngineCore::~RuleEngineCore()
@@ -62,8 +57,11 @@ RuleEngineCore::~RuleEngineCore()
     finalize();
 }
 
-void RuleEngineCore::setup()
+void RuleEngineCore::setup(MsgPushPointer msgcall, InsPushPointer inscall, TxtPushPointer txtcall)
 {
+    if (!msgcall || !inscall || !txtcall)
+        return;
+
     LOGTT();
     Mutex::Autolock _l(&mEnvMutex);
 
@@ -72,14 +70,18 @@ void RuleEngineCore::setup()
     init_clips_logger(mEnv->cobj());
 
     /* build defglobal version */
-    char data[256] = { 0 };
-    snprintf(data, 255,
+    char data[512] = { 0 };
+    snprintf(data, 511,
         "(defglobal\n"
-        "  ?*VERSION-MAJOR* = %u\n"
-        "  ?*VERSION-MINOR* = %u\n"
-        "  ?*VERSION-MICRO* = %u\n"
-        "  ?*MSG-RULE-RESPONSE* = %d\n"
-        ")\n", HB_VERSION_MAJOR, HB_VERSION_MINOR, HB_VERSION_MICRO, MSG_RULE_RESPONSE);
+        "  ?*VERSION-MAJOR* = %u\n  ?*VERSION-MINOR* = %u\n  ?*VERSION-MICRO* = %u\n"
+        "  ?*TYPE-TEM-FILE* = %u\n  ?*TYPE-CLS-FILE* = %u\n  ?*TYPE-RUL-FILE* = %u\n"
+        "  ?*MSG-RULE-RESPONSE* = %d\n  ?*RUL-SUCCESS* = %d\n  ?*RUL-FAIL* = %d\n  ?*RUL-TIMEOUT* = %d\n"
+        "  ?*MSG-RULE-RHS* = %d\n  ?*RHS-INS-NOT-FOUND* = %d\n  ?*RHS-NTF-WRONG-TYPE* = %d\n  ?*RHS-SEE-NOT-FOUND* = %d\n"
+        ")\n",
+        HB_VERSION_MAJOR, HB_VERSION_MINOR, HB_VERSION_MICRO,
+        TYPE_TEM_FILE, TYPE_CLS_FILE, TYPE_RUL_FILE,
+        MSG_RULE_RESPONSE, RUL_SUCCESS, RUL_FAIL, RUL_TIMEOUT,
+        MSG_RULE_RHS, RHS_INS_NOT_FOUND, RHS_NTF_WRONG_TYPE, RHS_SEE_NOT_FOUND);
     mEnv->build(data);
 
     /* regist [clear, periodic, reset, rulefiring] callback */
@@ -93,18 +95,25 @@ void RuleEngineCore::setup()
     mEnv->add_function("get-root-dir", std::make_shared<Functor<std::string>>(this, &RuleEngineCore::_CallGetRootDir));
     mEnv->add_function("get-files", std::make_shared<Functor<Values, int>>(this, &RuleEngineCore::_CallGetFiles));
     mEnv->add_function("now", std::make_shared<Functor<Values>>(this, &RuleEngineCore::_CallNow));
+    mEnv->add_function("init-finished", std::make_shared<Functor<void>>(this, &RuleEngineCore::_CallInitFinished));
+
+    mEnv->add_function("msg-push", msgcall);
+    mEnv->add_function("ins-push", inscall);
+    mEnv->add_function("txt-push", txtcall);
+
 }
 
-void RuleEngineCore::start()
+void RuleEngineCore::start(std::string &rootDir, GetFilesCallback callback)
 {
     LOGTT();
-    mEnv->batch_evaluate(ruleEngine().getServerRoot() + "/init.clp");
+    mRootDir = rootDir;
+    mGetFilesCB = callback;
+    mEnv->batch_evaluate(mRootDir + "/init.clp");
     assertRun("(init)");
 }
 
 long RuleEngineCore::assertRun(std::string assert)
 {
-    /* LOGTT(); */
     mEnv->assert_fact(assert);
     mEnv->refresh_agenda();
     return mEnv->run();
@@ -198,14 +207,14 @@ std::string RuleEngineCore::handleClassSync(const char *clsName, const char *ver
         return std::string("");
     }
 
-    std::string path(ruleEngine().getServerRoot() + "/");
+    std::string path(mRootDir + "/");
     path.append(CLSES_SEARCH_DIR).append(clsName).append(".clp");
     std::ofstream of(path);
     if (!of.is_open())
         return std::string("");
     of << buildStr << std::endl;
     of.close();
-    return path;
+    return std::move(path);
 }
 
 std::string RuleEngineCore::handleRuleSync(const char *ruleName, const char *ver, const char *buildStr)
@@ -224,70 +233,127 @@ std::string RuleEngineCore::handleRuleSync(const char *ruleName, const char *ver
         return std::string("");
     }
 
-    std::string path(ruleEngine().getServerRoot() + "/");
+    std::string path(mRootDir + "/");
     path.append(RULES_SEARCH_DIR).append(ruleName).append(".clp");
     std::ofstream of(path);
     if (!of.is_open())
         return std::string("");
     of << buildStr << std::endl;
     of.close();
-    return path;
+    return std::move(path);
 }
 
-void RuleEngineCore::handleInstanceAdd(const char *insName, const char *clsName)
+bool RuleEngineCore::handleInstanceAdd(const char *insName, const char *clsName)
 {
     LOGI("(%s %s)\n", insName, clsName);
     if (!insName || !clsName)
-        return;
+        return false;
 
     Mutex::Autolock _l(&mEnvMutex);
     InstancesMap::iterator it = mInses.find(insName);
     if (it != mInses.end()) {
         LOGW("Instance[%s] already exists!\n", insName);
-        return;
+        return false;
     }
     std::stringstream ss;
     ss << "(" << insName << " of " << clsName << ")";
     Instance::pointer ins = mEnv->make_instance(ss.str().c_str());
     if (!ins) {
         LOGW("Make instance[%s] fail!\n", insName);
-        return;
+        return false;
     }
     mInses.insert(std::pair<std::string, Instance::pointer>(insName, ins));
     LOGD("Make instance[%s] success!\n", insName);
+    return true;
 }
 
-void RuleEngineCore::handleInstanceDel(const char *insName)
+bool RuleEngineCore::handleInstanceDel(const char *insName)
 {
     LOGI("(%s)\n", insName);
     if (!insName)
-        return;
+        return false;
 
     Mutex::Autolock _l(&mEnvMutex);
     InstancesMap::iterator it = mInses.find(insName);
     if (it == mInses.end()) {
         LOGW("Not found instance[%s]!\n", insName);
-        return;
+        return false;
     }
     mInses.erase(it);
+    return true;
 }
 
-void RuleEngineCore::handleInstancePut(const char *insName, const char *slot, const char *value)
+bool RuleEngineCore::handleInstancePut(const char *insName, const char *slot, const char *value)
 {
     LOGI("(%s %s %s)\n", insName, slot, value);
     if (!insName || !slot || !value)
-        return;
+        return false;
 
     Mutex::Autolock _l(&mEnvMutex);
     InstancesMap::iterator it = mInses.find(insName);
     if (it == mInses.end()) {
         LOGW("Not found instance[%s]!\n", insName);
-        return;
+        return false;
     }
     it->second->send(std::string("put-").append(slot), value);
 
     mEnv->refresh_agenda();
     mEnv->run();
+    return true;
+}
+
+bool RuleEngineCore::handleRuleAdd(const char *rulName)
+{
+    LOGI("(add rule: %s)\n", rulName);
+    if (!rulName)
+        return false;
+    Mutex::Autolock _l(&mEnvMutex);
+
+    RulesMap::iterator it = mRules.find(rulName);
+    if (it != mRules.end())
+        return false;
+
+    Rule::pointer rul = mEnv->get_rule(rulName);
+    if (!rul) {
+        LOGW("get_rule(%s) error!\n", rulName);
+        return false;
+    }
+    mRules.insert(std::pair<std::string, Rule::pointer>(rulName,rul));
+    return true;
+}
+
+bool RuleEngineCore::handleRuleDel(const char *rulName)
+{
+    LOGI("(del rule: %s)\n", rulName);
+    if (!rulName)
+        return false;
+    Mutex::Autolock _l(&mEnvMutex);
+
+    RulesMap::iterator it = mRules.find(rulName);
+    if (it == mRules.end()) {
+        LOGW("Not found rule[%s]!\n", rulName);
+        return false;
+    }
+    /* delete rule */
+    it->second->retract();
+    mRules.erase(it);
+    return true;
+}
+
+bool RuleEngineCore::refreshRule(const char *rulName)
+{
+    LOGI("refreshRule(%s)\n", rulName);
+    if (!rulName)
+        return false;
+    Mutex::Autolock _l(&mEnvMutex);
+
+    RulesMap::iterator it = mRules.find(rulName);
+    if (it == mRules.end()) {
+        LOGW("Not found rule[%s]!\n", rulName);
+        return false;
+    }
+    it->second->refresh();
+    return true;
 }
 
 void RuleEngineCore::_OnClear(void)
@@ -319,31 +385,19 @@ int RuleEngineCore::_CallGetDebugLevel()
 
 std::string RuleEngineCore::_CallGetRootDir()
 {
-    LOGTT();
-    return ruleEngine().getServerRoot();
+    return mRootDir;
 }
 
 Values RuleEngineCore::_CallGetFiles(int fileType)
 {
-    LOGTT();
     Values rv;
-    std::vector<std::string> files;
-    switch (fileType) {
-        case 1:
-            files = ruleEngine().store()->queryTemplateFilePaths();
-            break;
-        case 2:
-            files = ruleEngine().store()->queryClassFilePaths();
-            break;
-        case 3:
-            files = ruleEngine().store()->queryRuleFilePaths();
-            break;
-        default:
-            break;
-    }
-    for (size_t i = 0; i < files.size(); ++i) {
-        LOGD("clp file: [%s]\n", files[i].c_str());
-        rv.push_back(files[i]);
+    if (mGetFilesCB) {
+        std::vector<std::string> files;
+        files = mGetFilesCB(fileType);
+        for (size_t i = 0; i < files.size(); ++i) {
+            LOGD("clp file: [%s]\n", files[i].c_str());
+            rv.push_back(files[i]);
+        }
     }
     return rv;
 }
@@ -363,4 +417,15 @@ Values RuleEngineCore::_CallNow()
     rv.push_back(dt.mDayOfWeek); /* week day */
     return rv;
 }
+
+void RuleEngineCore::_CallInitFinished()
+{
+    Module::pointer mod = mEnv->get_module("MAIN");
+    if (mod) {
+        std::vector<std::string> rules = mEnv->get_rule_names(mod);
+        for (size_t i = 0; i < rules.size(); ++i)
+            handleRuleAdd(rules[i].c_str());
+    }
+}
+
 } /* namespace HB */

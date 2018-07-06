@@ -11,8 +11,12 @@
 
 #include "MessageHandler.h"
 #include "DataChannel.h"
+#include "RuleEventThread.h"
 #include "RuleEngineStore.h"
 #include "RuleEngineCore.h"
+
+#include <map>
+#include <set>
 
 #ifdef __cplusplus
 
@@ -29,7 +33,7 @@ public:
 
     void setServerRoot(std::string rootDir) { mServerRoot = rootDir; }
     std::string& getServerRoot() { return mServerRoot; }
-    int init();
+    int init(int urgent = false);
 
     void setRuleChannel(std::shared_ptr<DataChannel> channel);
     void setDeviceChannel(std::shared_ptr<DataChannel> channel);
@@ -39,15 +43,37 @@ public:
     bool callContentPush(std::string id, std::string title, std::string content);
     bool triggerRule(std::string ruleId);
 
+    std::vector<std::string> callGetFiles(int fileType, bool urgent);
+
     RuleEngineStore::pointer store() { return mStore; }
     RuleEngineCore::pointer core() { return mCore; }
+    RuleEngineCore::pointer coreForUrgent() { return mCoreForUrgent; }
+
+    class RuleUrgentThread : public RuleEventThread {
+    public:
+        RuleUrgentThread(RuleEngineService &service) : mService(service) {}
+        ~RuleUrgentThread(){}
+        void run();
+    private:
+        RuleEngineService &mService;
+    };
 
 private:
+    bool _OfflineInstanceCalledByRHS(std::string &insName, std::string &rulName);
+    bool _OnlineInstanceRefreshRules(std::string &insName);
+
+private:
+    friend class RuleEventThread;
     std::string mServerRoot;
     RuleEngineCore::pointer mCore;
+    RuleEngineCore::pointer mCoreForUrgent;
+    RuleEventHandler *mUrgentHandler;
+
     RuleEngineStore::pointer mStore;
     DataChannel::pointer mRuleChannel;
     DataChannel::pointer mClassChannel;
+
+    std::map<std::string, std::set<std::string>> mOfflineInsesCalled;
 
 }; /* class RuleEngineService */
 

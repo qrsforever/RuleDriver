@@ -40,9 +40,9 @@
 (defrule load-files
     (init)
   =>
-    (bind ?templfs (get-files 1))
-    (bind ?clsesfs (get-files 2))
-    (bind ?rulesfs (get-files 3))
+    (bind ?templfs (get-files ?*TYPE-TEM-FILE*))
+    (bind ?clsesfs (get-files ?*TYPE-CLS-FILE*))
+    (bind ?rulesfs (get-files ?*TYPE-RUL-FILE*))
 
     (load-files ?templfs)
     (load-files ?clsesfs)
@@ -75,6 +75,8 @@
         (printout trace crlf)
     )
     (seed (integer (time)))
+    ; call RuleEngineCore function
+    (init-finished)
 )
 
 ;-----------------------------------------------------------------

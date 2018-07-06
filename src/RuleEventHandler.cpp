@@ -27,6 +27,11 @@ RuleEventHandler::RuleEventHandler(MessageQueue *queue)
 
 }
 
+RuleEventHandler::RuleEventHandler() : MessageHandler()
+{
+
+}
+
 RuleEventHandler::~RuleEventHandler()
 {
 

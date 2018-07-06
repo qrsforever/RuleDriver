@@ -33,4 +33,22 @@
 /*****************
 *  Rule Script   *
 *****************/
-#define MSG_RULE_RESPONSE   1  /* Rule Message What: must be consistent with clp script */
+#define TYPE_TEM_FILE       1   /* Rule Load Rule File Type: Template */
+#define TYPE_CLS_FILE       2   /* Rule Load Rule File Type: Class */
+#define TYPE_RUL_FILE       3   /* Rule Load Rule File Type: Rule */
+
+#define MSG_RULE_RESPONSE   1   /* Rule Message What: must be consistent with clp script */
+#define MSG_RULE_RHS        2   /* Rule Message What: occur on RHS */
+
+#define RUL_SUCCESS  1
+#define RUL_FAIL     2
+#define RUL_TIMEOUT 3
+
+#define RHS_INS_NOT_FOUND   1   /* Rule RHS SUB Arg1: not found instance id */
+#define RHS_NTF_WRONG_TYPE  2   /* Rule RHS SUB Arg1: parameters is invalid */
+#define RHS_SEE_NOT_FOUND   3   /* Rule RHS SUB Arg1: scene not found */
+
+
+#define TEMLS_SEARCH_DIR "templates/"   /* specify directory of templates file */
+#define CLSES_SEARCH_DIR "classes/"     /* specify directory of classes file */
+#define RULES_SEARCH_DIR "rules/"       /* specify directory of rules file */

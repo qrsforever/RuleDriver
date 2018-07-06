@@ -18,8 +18,8 @@
 
 namespace HB {
 
-RuleEngineStore::RuleEngineStore(RuleEventHandler &handler, const std::string db)
-    : mHandler(handler)
+RuleEngineStore::RuleEngineStore(const std::string db)
+    : mHandler(ruleHandler())
     , mDBFilePath(db), mDB(0)
     , mDefClassTab(0)
     , mDefRuleTab(0)
@@ -95,14 +95,19 @@ bool RuleEngineStore::_UpdateDefTable(DefTable *table, const char *defName, cons
     return true;
 }
 
-std::vector<std::string> RuleEngineStore::_QueryDefFilePaths(DefTable *table)
+std::vector<std::string> RuleEngineStore::_QueryDefFilePaths(DefTable *table, bool urgent)
 {
     if (!open() || !table)
         return std::vector<std::string>();
 
+    if (urgent) {
+        /* not used yet */
+        return std::vector<std::string>();
+    }
+
     LOGTT();
     Mutex::Autolock _l(&mDBMutex);
-    return table->getFilePaths();
+    return std::move(table->getFilePaths());
 }
 
 bool RuleEngineStore::updateTemplateTable(const char *tmplName, const char *version, const char *fileName)
@@ -120,19 +125,19 @@ bool RuleEngineStore::updateRuleTable(const char *ruleName, const char *version,
     return _UpdateDefTable(_GetTable(TT_DEFRULE), ruleName, version, fileName);
 }
 
-std::vector<std::string> RuleEngineStore::queryTemplateFilePaths()
+std::vector<std::string> RuleEngineStore::queryTemplateFilePaths(bool urgent)
 {
-    return _QueryDefFilePaths(_GetTable(TT_DEFTEMPLATE));
+    return std::move(_QueryDefFilePaths(_GetTable(TT_DEFTEMPLATE), urgent));
 }
 
-std::vector<std::string> RuleEngineStore::queryClassFilePaths()
+std::vector<std::string> RuleEngineStore::queryClassFilePaths(bool urgent)
 {
-    return _QueryDefFilePaths(_GetTable(TT_DEFCLASS));
+    return std::move(_QueryDefFilePaths(_GetTable(TT_DEFCLASS), urgent));
 }
 
-std::vector<std::string> RuleEngineStore::queryRuleFilePaths()
+std::vector<std::string> RuleEngineStore::queryRuleFilePaths(bool urgent)
 {
-    return _QueryDefFilePaths(_GetTable(TT_DEFRULE));
+    return std::move(_QueryDefFilePaths(_GetTable(TT_DEFRULE), urgent));
 }
 
 } /* namespace HB */

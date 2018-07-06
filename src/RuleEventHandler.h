@@ -19,6 +19,7 @@ namespace HB {
 class RuleEventHandler : public ::UTILS::MessageHandler {
 public:
     RuleEventHandler(::UTILS::MessageQueue *queue);
+    RuleEventHandler();
     ~RuleEventHandler();
 
 protected:
