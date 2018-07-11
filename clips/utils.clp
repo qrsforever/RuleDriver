@@ -172,7 +172,11 @@
      then
         (logi "make-rule:" ?genrule)
     )
-    (return (build ?genrule))
+    (if (check-syntax ?genrule)
+     then
+        (return (build ?genrule))
+    )
+    (return false)
 )
 
 ; delete one rule in clp script when (assert (delete-rule ruleid-1 ruleid-2))

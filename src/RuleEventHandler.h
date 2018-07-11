@@ -18,6 +18,8 @@ namespace HB {
 
 class RuleEventHandler : public ::UTILS::MessageHandler {
 public:
+    typedef std::shared_ptr<RuleEventHandler> pointer;
+
     RuleEventHandler(::UTILS::MessageQueue *queue);
     RuleEventHandler();
     ~RuleEventHandler();

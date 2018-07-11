@@ -7,7 +7,6 @@
  ****************************************************************************/
 
 #include "RuleEngineService.h"
-#include "RuleEventHandler.h"
 #include "DataChannel.h"
 #include "InstancePayload.h"
 #include "ClassPayload.h"
@@ -15,6 +14,7 @@
 #include "StringData.h"
 #include "Message.h"
 #include "Log.h"
+#include "RuleTimerEvent.h"
 
 #define RULE_DB_NAME "ruleengine.db"
 
@@ -56,7 +56,7 @@ void RuleEngineService::setDeviceChannel(std::shared_ptr<DataChannel> channel)
     mClassChannel = channel;
 }
 
-int RuleEngineService::init(int urgent)
+int RuleEngineService::init(bool urgent)
 {
     if (!(mStore = std::make_shared<RuleEngineStore>(mServerRoot + "/" + RULE_DB_NAME)))
         return -1;
@@ -112,23 +112,23 @@ bool RuleEngineService::handleMessage(Message *msg)
 
     switch(msg->what) {
         case RET_INSTANCE_ADD:
-            if (msg->obj) {
+            if (msg->obj) {/*{{{*/
                 std::shared_ptr<InstancePayload> payload(std::dynamic_pointer_cast<InstancePayload>(msg->obj));
                 if (PT_INSTANCE_PAYLOAD == payload->type()) {
                     if (driver->handleInstanceAdd(payload->mInsName.c_str(), payload->mClsName.c_str()))
                         _OnlineInstanceRefreshRules(payload->mInsName);
                 }
-            }
+            }/*}}}*/
             return true;
         case RET_INSTANCE_DEL:
-            if (msg->obj) {
+            if (msg->obj) {/*{{{*/
                 std::shared_ptr<InstancePayload> payload(std::dynamic_pointer_cast<InstancePayload>(msg->obj));
                 if (PT_INSTANCE_PAYLOAD == payload->type())
                     driver->handleInstanceDel(payload->mInsName.c_str());
-            }
+            }/*}}}*/
             return true;
         case RET_INSTANCE_PUT:
-            if (msg->obj) {
+            if (msg->obj) {/*{{{*/
                 std::shared_ptr<InstancePayload> payload(std::dynamic_pointer_cast<InstancePayload>(msg->obj));
                 if (PT_INSTANCE_PAYLOAD == payload->type()) {
                     driver->handleInstancePut(
@@ -136,10 +136,10 @@ bool RuleEngineService::handleMessage(Message *msg)
                         payload->mSlots[0].nName.c_str(),
                         payload->mSlots[0].nValue.c_str());
                 }
-            }
+            }/*}}}*/
             return true;
         case RET_CLASS_SYNC:
-            if (msg->obj) {
+            if (msg->obj) {/*{{{*/
                 std::shared_ptr<ClassPayload> payload(std::dynamic_pointer_cast<ClassPayload>(msg->obj));
                 if (PT_CLASS_PAYLOAD != payload->type()) {
                     LOGW("payload type not match!\n");
@@ -154,10 +154,10 @@ bool RuleEngineService::handleMessage(Message *msg)
                         payload->mClsName.c_str(),
                         payload->mVersion.c_str(), path.c_str());
                 }
-            }
+            }/*}}}*/
             return true;
         case RET_RULE_SYNC:
-            if (msg->obj) {
+            if (msg->obj) {/*{{{*/
                 std::shared_ptr<RulePayload> payload(std::dynamic_pointer_cast<RulePayload>(msg->obj));
                 if (PT_RULE_PAYLOAD != payload->type()) {
                     LOGW("payload type not match!\n");
@@ -173,15 +173,15 @@ bool RuleEngineService::handleMessage(Message *msg)
                         payload->mVersion.c_str(), path.c_str());
                     driver->handleRuleAdd(payload->mRuleName.c_str());
                 }
-            }
+            }/*}}}*/
             return true;
         case RET_TRIGGER_RULE:
-            if (msg->obj) {
+            if (msg->obj) {/*{{{*/
                 std::shared_ptr<StringData> assert(std::dynamic_pointer_cast<StringData>(msg->obj));
                 int count = driver->assertRun(assert->getData());
                 if (count > 0)
                     LOGD("trigger rule agenda [%d]\n", count);
-            }
+            }/*}}}*/
             return true;
         default:
             return false;
@@ -191,7 +191,8 @@ bool RuleEngineService::handleMessage(Message *msg)
 
 void RuleEngineService::RuleUrgentThread::run()
 {
-    mService.mUrgentHandler = new RuleEventHandler();
+    LOGI("Rule RuleUrgentThread:[%u]\n", id());
+    mService.mUrgentHandler = std::make_shared<RuleEventHandler>();
     mService.mUrgentHandler->mCallback = &mService;
     return RuleEventThread::run();
 }
@@ -306,6 +307,12 @@ RuleEngineService& ruleEngine()
         ruleHandler().mCallback = gRuleEngine;
     }
     return *gRuleEngine;
+}
+
+RuleEventHandler& urgentHandler()
+{
+    /* TODO Dangerous API, must call this after RuleEngineService::init() */
+    return *(ruleEngine().urgentHandler().get());
 }
 
 } /* namespace HB */

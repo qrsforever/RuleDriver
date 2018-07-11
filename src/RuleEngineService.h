@@ -14,6 +14,7 @@
 #include "RuleEventThread.h"
 #include "RuleEngineStore.h"
 #include "RuleEngineCore.h"
+#include "RuleEventHandler.h"
 
 #include <map>
 #include <set>
@@ -33,7 +34,7 @@ public:
 
     void setServerRoot(std::string rootDir) { mServerRoot = rootDir; }
     std::string& getServerRoot() { return mServerRoot; }
-    int init(int urgent = false);
+    int init(bool urgent = false);
 
     void setRuleChannel(std::shared_ptr<DataChannel> channel);
     void setDeviceChannel(std::shared_ptr<DataChannel> channel);
@@ -48,6 +49,7 @@ public:
     RuleEngineStore::pointer store() { return mStore; }
     RuleEngineCore::pointer core() { return mCore; }
     RuleEngineCore::pointer coreForUrgent() { return mCoreForUrgent; }
+    RuleEventHandler::pointer urgentHandler() { return mUrgentHandler; }
 
     class RuleUrgentThread : public RuleEventThread {
     public:
@@ -67,7 +69,7 @@ private:
     std::string mServerRoot;
     RuleEngineCore::pointer mCore;
     RuleEngineCore::pointer mCoreForUrgent;
-    RuleEventHandler *mUrgentHandler;
+    RuleEventHandler::pointer mUrgentHandler;
 
     RuleEngineStore::pointer mStore;
     DataChannel::pointer mRuleChannel;
@@ -78,6 +80,8 @@ private:
 }; /* class RuleEngineService */
 
 RuleEngineService& ruleEngine();
+
+RuleEventHandler& urgentHandler();
 
 } /* namespace HB */
 
