@@ -7,9 +7,6 @@
  ****************************************************************************/
 
 #include "RuleEngineStore.h"
-#include "DefTemplateTable.h"
-#include "DefClassTable.h"
-#include "DefRuleTable.h"
 #include "RuleEventHandler.h"
 
 #include "Log.h"
@@ -18,11 +15,10 @@
 
 namespace HB {
 
-RuleEngineStore::RuleEngineStore(const std::string db)
+RuleEngineStore::RuleEngineStore(const std::string &db)
     : mHandler(ruleHandler())
-    , mDBFilePath(db), mDB(0)
-    , mDefClassTab(0)
-    , mDefRuleTab(0)
+    , mDBFilePath(db), mDB(0), mDefTmplTab(0)
+    , mDefClassTab(0), mDefRuleTab(0), mTimerEventTab(0)
 {
     LOGTT();
 }
@@ -37,16 +33,14 @@ bool RuleEngineStore::open()
 {
     LOGTT();
     mHandler.removeMessages(RET_STORE_CLOSE);
-    mHandler.sendMessageDelayed(
-        mHandler.obtainMessage(RET_STORE_CLOSE, shared_from_this()), DELAY_TIME);
+    mHandler.sendEmptyMessageDelayed(RET_STORE_CLOSE, DELAY_TIME);
+    /* mHandler.sendMessageDelayed(
+     *     mHandler.obtainMessage(RET_STORE_CLOSE, shared_from_this()), DELAY_TIME); */
     if (isOpen())
         return true;
     mDB = new SQLiteDatabase();
     if (!mDB->open(mDBFilePath.c_str()))
         return false;
-    mDefTmplTab = new DefTemplateTable(*mDB);
-    mDefClassTab = new DefClassTable(*mDB);
-    mDefRuleTab = new DefRuleTable(*mDB);
     return true;
 }
 
@@ -54,6 +48,9 @@ bool RuleEngineStore::close()
 {
     LOGTT();
     Mutex::Autolock _l(&mDBMutex);
+    if (mDefTmplTab)
+        delete mDefTmplTab;
+    mDefTmplTab = 0;
     if (mDefClassTab)
         delete mDefClassTab;
     mDefClassTab = 0;
@@ -66,24 +63,9 @@ bool RuleEngineStore::close()
     return true;
 }
 
-DefTable* RuleEngineStore::_GetTable(TableType type)
+/*{{{ public def table */
+bool RuleEngineStore::_UpdateDefTable(DefTable *table, const std::string &defName, const std::string &version, const std::string &fileName)
 {
-    switch (type) {
-        case TT_DEFTEMPLATE:
-            return mDefTmplTab;
-        case TT_DEFCLASS:
-            return mDefClassTab;
-        case TT_DEFRULE:
-            return mDefRuleTab;
-    }
-    return 0;
-}
-
-bool RuleEngineStore::_UpdateDefTable(DefTable *table, const char *defName, const char *version, const char *fileName)
-{
-    if (!open() || !table)
-        return false;
-
     LOGTT();
     Mutex::Autolock _l(&mDBMutex);
     DefInfo info;
@@ -97,9 +79,6 @@ bool RuleEngineStore::_UpdateDefTable(DefTable *table, const char *defName, cons
 
 std::vector<std::string> RuleEngineStore::_QueryDefFilePaths(DefTable *table, bool urgent)
 {
-    if (!open() || !table)
-        return std::vector<std::string>();
-
     if (urgent) {
         /* not used yet */
         return std::vector<std::string>();
@@ -110,34 +89,106 @@ std::vector<std::string> RuleEngineStore::_QueryDefFilePaths(DefTable *table, bo
     return std::move(table->getFilePaths());
 }
 
-bool RuleEngineStore::updateTemplateTable(const char *tmplName, const char *version, const char *fileName)
+bool RuleEngineStore::updateTemplateTable(const std::string &tmplName, const std::string &version, const std::string &fileName)
 {
-    return _UpdateDefTable(_GetTable(TT_DEFTEMPLATE), tmplName, version, fileName);
+    if (!open())
+        return false;
+    return _UpdateDefTable(&templateTable(), tmplName, version, fileName);
 }
 
-bool RuleEngineStore::updateClassTable(const char *clsName, const char *version, const char *fileName)
+bool RuleEngineStore::updateClassTable(const std::string &clsName, const std::string &version, const std::string &fileName)
 {
-    return _UpdateDefTable(_GetTable(TT_DEFCLASS), clsName, version, fileName);
+    if (!open())
+        return false;
+    return _UpdateDefTable(&classTable(), clsName, version, fileName);
 }
 
-bool RuleEngineStore::updateRuleTable(const char *ruleName, const char *version, const char *fileName)
+bool RuleEngineStore::updateRuleTable(const std::string &ruleName, const std::string &version, const std::string &fileName)
 {
-    return _UpdateDefTable(_GetTable(TT_DEFRULE), ruleName, version, fileName);
+    if (!open())
+        return false;
+    return _UpdateDefTable(&ruleTable(), ruleName, version, fileName);
 }
 
 std::vector<std::string> RuleEngineStore::queryTemplateFilePaths(bool urgent)
 {
-    return std::move(_QueryDefFilePaths(_GetTable(TT_DEFTEMPLATE), urgent));
+    if (!open())
+        return std::vector<std::string>();
+    return std::move(_QueryDefFilePaths(&templateTable(), urgent));
 }
 
 std::vector<std::string> RuleEngineStore::queryClassFilePaths(bool urgent)
 {
-    return std::move(_QueryDefFilePaths(_GetTable(TT_DEFCLASS), urgent));
+    if (!open())
+        return std::vector<std::string>();
+    return std::move(_QueryDefFilePaths(&classTable(), urgent));
 }
 
 std::vector<std::string> RuleEngineStore::queryRuleFilePaths(bool urgent)
 {
-    return std::move(_QueryDefFilePaths(_GetTable(TT_DEFRULE), urgent));
+    if (!open())
+        return std::vector<std::string>();
+    return std::move(_QueryDefFilePaths(&ruleTable(), urgent));
+}
+/*}}}*/
+
+/*{{{ rule table */
+bool RuleEngineStore::updateRuleForEnable(const std::string &ruleId, bool value)
+{
+    if (!open())
+        return false;
+    return ruleTable().updateForEnable(ruleId, value);
 }
 
+bool RuleEngineStore::updateRuleForTimers(const std::string &ruleId, const std::string &value)
+{
+    if (!open() || value.empty())
+        return false;
+    return ruleTable().updateForTimers(ruleId, value);
+}
+
+std::vector<DefRuleInfo> RuleEngineStore::queryRuleInfos()
+{
+    if (!open())
+        return std::vector<DefRuleInfo>();
+    return std::move(ruleTable().getDefRuleInfos());
+}
+
+std::string RuleEngineStore::queryRuleTimers(const std::string &ruleId)
+{
+    if (!open())
+        return std::string();
+    return std::move(ruleTable().getTimersByKey(ruleId));
+}
+
+bool RuleEngineStore::deleteRule(const std::string &ruleId)
+{
+    if (!open())
+        return false;
+    return ruleTable().deleteByKey(ruleId);
+}
+/*}}}*/
+
+/*{{{ timer event table */
+bool RuleEngineStore::updateTimerEvent(const TimerEventInfo &info)
+{
+    if (!open())
+        return false;
+    return timerTable().updateOrInsert(info);
+}
+
+std::vector<TimerEventInfo> RuleEngineStore::queryTimerEventInfos()
+{
+    if (!open())
+        return std::vector<TimerEventInfo>();
+    return std::move(timerTable().getTimerEventInfos());
+}
+
+bool RuleEngineStore::queryTimerEvent(int eID, TimerEventInfo &info)
+{
+    if (!open())
+        return false;
+    return timerTable().getTimerEventInfoByKey(eID, info);
+}
+/*}}}*/
 } /* namespace HB */

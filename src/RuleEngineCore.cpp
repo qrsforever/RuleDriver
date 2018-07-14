@@ -82,25 +82,24 @@ void RuleEngineCore::setup(MsgPushPointer msgcall, InsPushPointer inscall, TxtPu
         TYPE_TEM_FILE, TYPE_CLS_FILE, TYPE_RUL_FILE,
         MSG_RULE_RESPONSE, RUL_SUCCESS, RUL_FAIL, RUL_TIMEOUT,
         MSG_RULE_RHS, RHS_INS_NOT_FOUND, RHS_NTF_WRONG_TYPE, RHS_SEE_NOT_FOUND);
+    printf("############# %d\n", __LINE__);
     mEnv->build(data);
 
-    /* regist [clear, periodic, reset, rulefiring] callback */
-    mEnv->regist_clear_callback(std::bind(&RuleEngineCore::_OnClear, this));
-    mEnv->regist_periodic_callback(std::bind(&RuleEngineCore::_OnPeriodic, this));
-    mEnv->regist_reset_callback(std::bind(&RuleEngineCore::_OnReset, this));
-    mEnv->regist_rulefiring_callback(std::bind(&RuleEngineCore::_OnRuleFiring, this));
+    printf("############# %d\n", __LINE__);
+    mEnv->setCallback(this);
 
+    printf("############# %d\n", __LINE__);
     /* regist function for clips script */
-    mEnv->add_function("get-debug-level", std::make_shared<Functor<int>>(this, &RuleEngineCore::_CallGetDebugLevel));
-    mEnv->add_function("get-root-dir", std::make_shared<Functor<std::string>>(this, &RuleEngineCore::_CallGetRootDir));
-    mEnv->add_function("get-files", std::make_shared<Functor<Values, int>>(this, &RuleEngineCore::_CallGetFiles));
-    mEnv->add_function("now", std::make_shared<Functor<Values>>(this, &RuleEngineCore::_CallNow));
-    mEnv->add_function("init-finished", std::make_shared<Functor<void>>(this, &RuleEngineCore::_CallInitFinished));
+    mEnv->add_function("get-debug-level", std::make_shared<Functor<int>>(this, &RuleEngineCore::onCallGetDebugLevel));
+    mEnv->add_function("get-root-dir", std::make_shared<Functor<std::string>>(this, &RuleEngineCore::onCallGetRootDir));
+    mEnv->add_function("get-files", std::make_shared<Functor<Values, int>>(this, &RuleEngineCore::onCallGetFiles));
+    mEnv->add_function("now", std::make_shared<Functor<Values>>(this, &RuleEngineCore::onCallNow));
+    mEnv->add_function("init-finished", std::make_shared<Functor<void>>(this, &RuleEngineCore::onCallInitFinished));
 
     mEnv->add_function("msg-push", msgcall);
     mEnv->add_function("ins-push", inscall);
     mEnv->add_function("txt-push", txtcall);
-
+    printf("############# %d\n", __LINE__);
 }
 
 void RuleEngineCore::start(std::string &rootDir, GetFilesCallback callback)
@@ -207,34 +206,38 @@ std::string RuleEngineCore::handleClassSync(const char *clsName, const char *ver
         return std::string("");
     }
 
-    std::string path(mRootDir + "/");
-    path.append(CLSES_SEARCH_DIR).append(clsName).append(".clp");
+    std::string path;
+    path.append(mRootDir).append("/").append(CLSES_SEARCH_DIR);
+    path.append(clsName).append(".clp");
+
     std::ofstream of(path);
     if (!of.is_open())
         return std::string("");
     of << buildStr << std::endl;
     of.close();
+    LOGTT();
     return std::move(path);
 }
 
-std::string RuleEngineCore::handleRuleSync(const char *ruleName, const char *ver, const char *buildStr)
+std::string RuleEngineCore::handleRuleSync(const char *ruleId, const char *ver, const char *buildStr)
 {
-    LOGI("(%s, %s)\n%s\n", ruleName, ver, buildStr);
-    if (!ruleName || !ver || !buildStr)
+    LOGI("(%s, %s)\n%s\n", ruleId, ver, buildStr);
+    if (!ruleId || !ver || !buildStr)
         return std::string("");
 
     Mutex::Autolock _l(&mEnvMutex);
-    Rule::pointer rule = mEnv->get_rule(ruleName);
+    Rule::pointer rule = mEnv->get_rule(ruleId);
     if (rule)
         rule->retract();
-
     if (!mEnv->build(buildStr)) {
-        LOGW("build rule [%s] error!\n", ruleName);
+        LOGW("build rule [%s] error!\n", ruleId);
         return std::string("");
     }
 
-    std::string path(mRootDir + "/");
-    path.append(RULES_SEARCH_DIR).append(ruleName).append(".clp");
+    std::string path;
+    path.append(mRootDir).append("/").append(RULES_SEARCH_DIR);
+    path.append(ruleId).append(".clp");
+
     std::ofstream of(path);
     if (!of.is_open())
         return std::string("");
@@ -302,93 +305,97 @@ bool RuleEngineCore::handleInstancePut(const char *insName, const char *slot, co
     return true;
 }
 
-bool RuleEngineCore::handleRuleAdd(const char *rulName)
+bool RuleEngineCore::enableRule(const char *ruleId)
 {
-    LOGI("(add rule: %s)\n", rulName);
-    if (!rulName)
+    LOGI("enable rule [%s]\n", ruleId);
+    if (!ruleId)
         return false;
+
+    std::string path;
+    path.append(mRootDir).append("/").append(RULES_SEARCH_DIR);
+    path.append(ruleId).append(".clp");
+
+    std::stringstream buildStr;
+    std::ifstream in;
+    in.open(path, std::ifstream::in);
+    if (!in.is_open())
+        return false;
+    buildStr << in.rdbuf();
+    in.close();
+
     Mutex::Autolock _l(&mEnvMutex);
 
-    RulesMap::iterator it = mRules.find(rulName);
-    if (it != mRules.end())
-        return false;
+    Rule::pointer rule = mEnv->get_rule(ruleId);
+    if (rule)
+        return true;
 
-    Rule::pointer rul = mEnv->get_rule(rulName);
-    if (!rul) {
-        LOGW("get_rule(%s) error!\n", rulName);
+    if (!mEnv->build(buildStr.str())) {
+        LOGW("build rule [%s] error!\n", ruleId);
         return false;
     }
-    mRules.insert(std::pair<std::string, Rule::pointer>(rulName,rul));
     return true;
 }
 
-bool RuleEngineCore::handleRuleDel(const char *rulName)
+bool RuleEngineCore::disableRule(const char *ruleId)
 {
-    LOGI("(del rule: %s)\n", rulName);
-    if (!rulName)
+    LOGI("(disable rule: %s)\n", ruleId);
+    if (!ruleId)
         return false;
     Mutex::Autolock _l(&mEnvMutex);
 
-    RulesMap::iterator it = mRules.find(rulName);
-    if (it == mRules.end()) {
-        LOGW("Not found rule[%s]!\n", rulName);
-        return false;
-    }
-    /* delete rule */
-    it->second->retract();
-    mRules.erase(it);
-    return true;
+    Rule::pointer rule = mEnv->get_rule(ruleId);
+    if (!rule)
+        return true;
+    return rule->retract();
 }
 
-bool RuleEngineCore::refreshRule(const char *rulName)
+bool RuleEngineCore::refreshRule(const char *ruleId)
 {
-    LOGI("refreshRule(%s)\n", rulName);
-    if (!rulName)
+    LOGI("refreshRule(%s)\n", ruleId);
+    if (!ruleId)
         return false;
-    Mutex::Autolock _l(&mEnvMutex);
+    Mutex::Autolock _l(mEnvMutex);
 
-    RulesMap::iterator it = mRules.find(rulName);
-    if (it == mRules.end()) {
-        LOGW("Not found rule[%s]!\n", rulName);
+    Rule::pointer rule = mEnv->get_rule(ruleId);
+    if (!rule)
         return false;
-    }
-    it->second->refresh();
+    rule->refresh();
     return true;
 }
 
-void RuleEngineCore::_OnClear(void)
+void RuleEngineCore::onCallClear()
 {
     /* LOGTT(); */
 }
 
-void RuleEngineCore::_OnPeriodic(void)
-{
-    /* LOGTT(); */
-}
-
-void RuleEngineCore::_OnReset(void)
+void RuleEngineCore::onCallReset(void)
 {
     LOGTT();
     mHandler.removeMessages(RET_REFRESH_TIMER);
     mHandler.sendEmptyMessage(RET_REFRESH_TIMER);
 }
 
-void RuleEngineCore::_OnRuleFiring(void)
+void RuleEngineCore::onPeriodic()
 {
     /* LOGTT(); */
 }
 
-int RuleEngineCore::_CallGetDebugLevel()
+void RuleEngineCore::onRuleFiring()
+{
+    /* LOGTT(); */
+}
+
+int RuleEngineCore::onCallGetDebugLevel()
 {
     return getLogLevel();
 }
 
-std::string RuleEngineCore::_CallGetRootDir()
+std::string RuleEngineCore::onCallGetRootDir()
 {
     return mRootDir;
 }
 
-Values RuleEngineCore::_CallGetFiles(int fileType)
+Values RuleEngineCore::onCallGetFiles(int fileType)
 {
     Values rv;
     if (mGetFilesCB) {
@@ -402,7 +409,7 @@ Values RuleEngineCore::_CallGetFiles(int fileType)
     return rv;
 }
 
-Values RuleEngineCore::_CallNow()
+Values RuleEngineCore::onCallNow()
 {
     SysTime::DateTime dt;
     SysTime::GetDateTime(&dt);
@@ -418,14 +425,9 @@ Values RuleEngineCore::_CallNow()
     return rv;
 }
 
-void RuleEngineCore::_CallInitFinished()
+void RuleEngineCore::onCallInitFinished()
 {
-    Module::pointer mod = mEnv->get_module("MAIN");
-    if (mod) {
-        std::vector<std::string> rules = mEnv->get_rule_names(mod);
-        for (size_t i = 0; i < rules.size(); ++i)
-            handleRuleAdd(rules[i].c_str());
-    }
+
 }
 
 } /* namespace HB */

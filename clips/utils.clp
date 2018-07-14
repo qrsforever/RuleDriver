@@ -46,30 +46,37 @@
 ;-----------------------------------------------------------------
 
 (deffunction load-file (?file)
-    (bind ?pos (str-index "." ?file))
-    (if (neq ?pos FALSE)
+    ; (bind ?pos (str-index "." ?file))
+    ; (if (neq ?pos FALSE)
+    ;  then
+    ;     (bind ?slash (str-index "/" ?file))
+    ;     (bind ?path (resolve-file ?file ?slash))
+    ;     (if (eq ?path FALSE)
+    ;      then
+    ;         (return)
+    ;     )
+    ;     (bind ?suffix (sub-string (+ ?pos 1) (length ?file) ?file))
+    ;     (switch ?suffix
+    ;         (case "clp"
+    ;          then
+    ;             (load* ?path)
+    ;         )
+    ;         (case "bat"
+    ;          then
+    ;             (batch* ?path)
+    ;         )
+    ;         (default (printout warn "Cannot load file: " ?file crlf))
+    ;     )
+    ;  else
+    ;     (printout warn "Only handle .clp or .bat files!" crlf)
+    ; )
+    (bind ?slash (str-index "/" ?file))
+    (bind ?path (resolve-file ?file ?slash))
+    (if (eq ?path FALSE)
      then
-        (bind ?slash (str-index "/" ?file))
-        (bind ?path (resolve-file ?file ?slash))
-        (if (eq ?path FALSE)
-         then
-            (return)
-        )
-        (bind ?suffix (sub-string (+ ?pos 1) (length ?file) ?file))
-        (switch ?suffix
-            (case "clp"
-             then
-                (load* ?path)
-            )
-            (case "bat"
-             then
-                (batch* ?path)
-            )
-            (default (printout warn "Cannot load file: " ?file crlf))
-        )
-     else
-        (printout warn "Only handle .clp or .bat files!" crlf)
+        (return)
     )
+    (load* ?path)
 )
 
 (deffunction load-files ($?file-list)

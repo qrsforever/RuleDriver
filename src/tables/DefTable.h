@@ -9,55 +9,39 @@
 #ifndef __DefTable_H__
 #define __DefTable_H__
 
-#include "SQLiteDatabase.h"
-#include <string>
-#include <vector>
-
-using namespace UTILS;
+#include "DBTable.h"
 
 namespace HB {
 
-typedef enum {
-    TT_DEFTEMPLATE = 0,
-    TT_DEFCLASS = 1,
-    TT_DEFRULE,
-} TableType;
+#define DEF_FIELD_DEFNAME  "DefName"
+#define DEF_FIELD_VERSION  "Version"
+#define DEF_FIELD_CLPPATH  "FilePath"
+#define DEF_FIELD_RAWDATA  "RawData"
 
 struct DefInfo {
     std::string mDefName;
     std::string mVersion;
     std::string mFilePath;
+    std::string mRawData;
 }; /* struct DefInfo */
 
-class DefTable {
+class DefTable : public DBTable {
 public:
     virtual ~DefTable();
 
-    virtual TableType type() = 0;
-    bool init();
-    int version();
-    const char* name() { return mTabName.c_str(); }
-
+    bool deleteByKey(const std::string &defName);
     bool updateOrInsert(const DefInfo &info);
-    std::string getVersion(std::string defName);
-    std::string getFilePath(std::string defName);
     std::vector<DefInfo> getDefInfos();
-    std::vector<std::string> getFilePaths();
+    virtual std::string getVersion(std::string defName);
+    virtual std::string getFilePath(std::string defName);
+    virtual std::vector<std::string> getFilePaths();
 
 #ifdef TABLE_DEBUG
     void showTable();
 #endif
 
-private:
-    bool _Update(int latestVersion);
-
 protected:
     DefTable(SQLiteDatabase &db, const char *tabName);
-    SQLiteDatabase& mDB;
-	std::vector<std::pair<int, std::string>> mUpdateHistoryList; /* for iterate alter update table */
-
-private:
-    std::string mTabName;
 
 }; /* class DefTable */
 

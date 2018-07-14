@@ -14,11 +14,9 @@
 
 #ifdef __cplusplus
 
-using namespace UTILS;
-
 namespace HB {
 
-class RuleEventThread : public MessageLooper, public Singleton<RuleEventThread> {
+class RuleEventThread : public ::UTILS::MessageLooper {
 public:
     RuleEventThread();
     ~RuleEventThread();

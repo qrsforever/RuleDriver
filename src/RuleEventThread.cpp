@@ -10,7 +10,7 @@
 #include "Log.h"
 #include <unistd.h>
 
-SINGLETON_STATIC_INSTANCE(HB::RuleEventThread)
+using namespace UTILS;
 
 namespace HB {
 

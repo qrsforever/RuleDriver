@@ -10,6 +10,7 @@
 #include "RuleEventThread.h"
 #include "RuleEventTypes.h"
 #include "RuleEngineStore.h"
+#include "RuleEngineService.h"
 
 #include "Log.h"
 #include "Message.h"
@@ -17,17 +18,15 @@
 
 using namespace UTILS;
 
+#define TIMER_MSECONDS 1000 /* 1s */
+
 namespace HB {
 
 static RuleEventHandler *gRuleHandler = 0;
+static RuleEventHandler *gUrgentHandler = 0;
 
-RuleEventHandler::RuleEventHandler(MessageQueue *queue)
-    : MessageHandler(queue)
-{
-
-}
-
-RuleEventHandler::RuleEventHandler() : MessageHandler()
+RuleEventHandler::RuleEventHandler(MessageQueue *queue, pthread_t id)
+    : MessageHandler(queue), mID(id)
 {
 
 }
@@ -39,18 +38,19 @@ RuleEventHandler::~RuleEventHandler()
 
 void RuleEventHandler::handleMessage(Message *msg)
 {
-    if (msg->what != RET_REFRESH_TIMER)
-        LOGD("msg: [%d] [%d] [%d]\n", msg->what, msg->arg1, msg->arg2);
+    if (msg->what == RET_REFRESH_TIMER) {
+        sendEmptyMessageDelayed(RET_REFRESH_TIMER, TIMER_MSECONDS);
+        return;
+    }
+
+    LOGD("msg: [%d] [%d] [%d]\n", msg->what, msg->arg1, msg->arg2);
 
     switch(msg->what) {
-        case RET_REFRESH_TIMER:
-            sendEmptyMessageDelayed(RET_REFRESH_TIMER, 1000);
-            break;
         case RET_STORE_CLOSE:
-            if (msg->obj) {
-                std::shared_ptr<RuleEngineStore> store(std::dynamic_pointer_cast<RuleEngineStore>(msg->obj));
-                store->close();
-            }
+            ruleEngine().store()->close();
+            break;
+        case RET_DEBUG:
+            ruleEngine().ccore()->debug(msg->arg1);
             break;
         default:
             break;
@@ -60,11 +60,25 @@ void RuleEventHandler::handleMessage(Message *msg)
 RuleEventHandler& ruleHandler()
 {
     if (0 == gRuleHandler) {
-        RuleEventThread &ruleThread = RuleEventThread::getInstance();
-        gRuleHandler = new RuleEventHandler(ruleThread.getMessageQueue());
-        ruleThread.start();
+        RuleEventThread *ruleThread = new RuleEventThread();
+        gRuleHandler = new RuleEventHandler(
+            ruleThread->getMessageQueue(),
+            ruleThread->id());
+        ruleThread->start();
     }
     return *gRuleHandler;
+}
+
+RuleEventHandler& urgentHandler()
+{
+    if (0 == gUrgentHandler) {
+        RuleEventThread *ruleThread = new RuleEventThread();
+        gUrgentHandler = new RuleEventHandler(
+            ruleThread->getMessageQueue(),
+            ruleThread->id());
+        ruleThread->start();
+    }
+    return *gUrgentHandler;
 }
 
 } /* namespace HB */

@@ -39,7 +39,7 @@ typedef std::shared_ptr<TxtPushCall> TxtPushPointer;
 
 typedef std::function<std::vector<std::string>(int type)> GetFilesCallback;
 
-class RuleEngineCore {
+class RuleEngineCore : public EnvironmentCallback {
 public:
     typedef std::shared_ptr<RuleEngineCore> pointer;
     RuleEngineCore(RuleEventHandler &handler);
@@ -52,37 +52,39 @@ public:
     long assertRun(std::string assert);
 
     bool handleTimer();
+
     std::string handleClassSync(const char *clsName, const char *ver, const char *buildStr);
-    std::string handleRuleSync(const char *ruleName, const char *ver, const char *buildStr);
+    std::string handleRuleSync(const char *ruleId, const char *ver, const char *buildStr);
+
     bool handleInstanceAdd(const char *insName, const char *clsName);
     bool handleInstanceDel(const char *insName);
     bool handleInstancePut(const char *insName, const char *slot, const char *value);
 
-    bool handleRuleAdd(const char *rulName);
-    bool handleRuleDel(const char *rulName);
-    bool refreshRule(const char *rulName);
+    bool refreshRule(const char *ruleId);
+    bool enableRule(const char *ruleId);
+    bool disableRule(const char *ruleId);
 
     void debug(int show);
 
 private:
 
-    void _OnClear(void);
-    void _OnPeriodic(void);
-    void _OnReset(void);
-    void _OnRuleFiring(void);
+    /* inherit from EnvironmentCallback */
+    void onCallClear();
+    void onCallReset();
+    void onPeriodic();
+    void onRuleFiring();
 
-    int _CallGetDebugLevel();
-    std::string _CallGetRootDir();
-    Values _CallGetFiles(int fileType);
-    Values _CallNow();
-    void _CallInitFinished();
+    int onCallGetDebugLevel();
+    std::string onCallGetRootDir();
+    Values onCallGetFiles(int fileType);
+    Values onCallNow();
+    void onCallInitFinished();
 
 private:
     UTILS::Mutex mEnvMutex;
     Environment *mEnv;
     RuleEventHandler &mHandler;
     InstancesMap mInses;
-    RulesMap mRules;
     std::string mRootDir;
     GetFilesCallback mGetFilesCB;
 }; /* class RuleEngineCore */

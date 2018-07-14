@@ -38,6 +38,10 @@
 ;   Global Template
 ;-----------------------------------------------------------------
 
+; timer event
+(deftemplate timer-event
+    (slot id)
+)
 
 ;-----------------------------------------------------------------
 ;    Global Class
@@ -98,4 +102,17 @@
     ?f <- (rule-response ?id $?)
   =>
     (retract ?f)
+)
+
+; remove the timer-event
+(defrule remove-timer-event
+    (declare (salience ?*SALIENCE-LOWEST*))
+    ?f <- (remove-timer-event ?id)
+  =>
+    (retract ?f)
+    (bind ?fact (nth$ 1 (find-fact ((?t timer-event)) (eq ?t:id ?id))))
+    (if (neq ?fact nil)
+     then
+        (retract ?fact)
+    )
 )

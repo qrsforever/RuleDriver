@@ -13,23 +13,21 @@
 #include "RulePayload.h"
 #include "StringData.h"
 #include "Message.h"
+#include "Common.h"
 #include "Log.h"
-#include "RuleTimerEvent.h"
+#include "RuleEngineTimer.h"
 
 #define RULE_DB_NAME "ruleengine.db"
 
 namespace HB {
 
-static RuleEngineService::RuleUrgentThread *gUrgentThread = 0;
-
-using namespace UTILS;
-
 static RuleEngineService *gRuleEngine = 0;
 
 RuleEngineService::RuleEngineService()
     : mServerRoot("clips")
-    , mCore(0), mCoreForUrgent(0), mStore(0)
+    , mCoreForNormal(0), mCoreForUrgent(0), mStore(0)
     , mRuleChannel(0), mClassChannel(0)
+    , mEnableRefreshRule(false)
 {
     LOGTT();
 }
@@ -41,9 +39,10 @@ RuleEngineService::~RuleEngineService()
     for (it = mOfflineInsesCalled.begin(); it != mOfflineInsesCalled.end(); ++it)
         it->second.clear();
     mOfflineInsesCalled.clear();
-    mCore.reset();
+    mCoreForNormal.reset();
     mCoreForUrgent.reset();
     mStore.reset();
+    mTimer.reset();
 }
 
 void RuleEngineService::setRuleChannel(std::shared_ptr<DataChannel> channel)
@@ -58,29 +57,51 @@ void RuleEngineService::setDeviceChannel(std::shared_ptr<DataChannel> channel)
 
 int RuleEngineService::init(bool urgent)
 {
-    if (!(mStore = std::make_shared<RuleEngineStore>(mServerRoot + "/" + RULE_DB_NAME)))
-        return -1;
+    mStore = std::make_shared<RuleEngineStore>(mServerRoot + "/" + RULE_DB_NAME);
+    mTimer = std::make_shared<RuleEngineTimer>(ruleHandler());
+
+    size_t i,j;
+    int eID;
+    bool wflg;
+    std::vector<std::string> eIDs;
+    TimerEventInfo eInfo;
+    std::vector<DefRuleInfo> ruleInfos = store()->queryRuleInfos();
+    for (i = 10; i < ruleInfos.size(); ++i) {
+        eIDs = stringSplit(ruleInfos[i].mTimers, ";");
+        for (j = 0; j < eIDs.size(); ++j) {
+            eID = atoi(eIDs[i].c_str());
+            if (!store()->queryTimerEvent(eID, eInfo))
+                continue;
+            wflg = eInfo.mWeek.empty() ? true : false;
+            TimerEvent::pointer tePtr = std::make_shared<TimerEvent>(eID, wflg);
+            tePtr->year()->resetFromString(eInfo.mYear);
+            tePtr->month()->resetFromString(eInfo.mMonth);
+            if (wflg)
+                tePtr->week()->resetFromString(eInfo.mWeek);
+            else
+                tePtr->day()->resetFromString(eInfo.mDay);
+            tePtr->hour()->resetFromString(eInfo.mHour);
+            tePtr->minute()->resetFromString(eInfo.mMinute);
+            tePtr->second()->resetFromString(eInfo.mSecond);
+            timer()->addEvent(ruleInfos[i].mDefName, tePtr);
+        }
+    }
 
     /*{{{ normal rule trigger */
-    if (!(mCore = std::make_shared<RuleEngineCore>(ruleHandler())))
-        return -1;
-    mCore->setup(
+    ruleHandler().mCallback = this;
+    mCoreForNormal = std::make_shared<RuleEngineCore>(ruleHandler());
+    mCoreForNormal->setup(
         std::make_shared<MsgPushCall>(this, &RuleEngineService::callMessagePush),
         std::make_shared<InsPushCall>(this, &RuleEngineService::callInstancePush),
         std::make_shared<TxtPushCall>(this, &RuleEngineService::callContentPush)
         );
-    mCore->start(mServerRoot, std::bind(&RuleEngineService::callGetFiles, this, std::placeholders::_1, false));
+    mCoreForNormal->start(mServerRoot, std::bind(&RuleEngineService::callGetFiles, this, std::placeholders::_1, false));
     /*}}}*/
 
     /*{{{ urgent rule trigger */
     if (urgent) {
-        if (!gUrgentThread) {
-            gUrgentThread = new RuleUrgentThread(*this);
-            gUrgentThread->start();
-        }
-        if (!(mCoreForUrgent = std::make_shared<RuleEngineCore>(*mUrgentHandler)))
-            return -1;
-
+        urgentHandler().mCallback = this;
+        mCoreForUrgent = std::make_shared<RuleEngineCore>(urgentHandler());
         mCoreForUrgent->setup(
             std::make_shared<MsgPushCall>(this, &RuleEngineService::callMessagePush),
             std::make_shared<InsPushCall>(this, &RuleEngineService::callInstancePush),
@@ -99,114 +120,184 @@ int RuleEngineService::init(bool urgent)
 
 bool RuleEngineService::handleMessage(Message *msg)
 {
-    RuleEngineCore *driver = 0;
-    if (gUrgentThread && gUrgentThread == Thread::currentThread())
-        driver = mCoreForUrgent.get();
-    else
-        driver = mCore.get();
-
     if (msg->what == RET_REFRESH_TIMER)
-        return driver->handleTimer();
-    else
-        LOGD("msg: [%d] [%d] [%d]\n", msg->what, msg->arg1, msg->arg2);
+        return ccore()->handleTimer();
 
+    LOGD("msg: [%d] [%d] [%d]\n", msg->what, msg->arg1, msg->arg2);
+
+    std::string assert;
     switch(msg->what) {
-        case RET_INSTANCE_ADD:
-            if (msg->obj) {/*{{{*/
-                std::shared_ptr<InstancePayload> payload(std::dynamic_pointer_cast<InstancePayload>(msg->obj));
-                if (PT_INSTANCE_PAYLOAD == payload->type()) {
-                    if (driver->handleInstanceAdd(payload->mInsName.c_str(), payload->mClsName.c_str()))
-                        _OnlineInstanceRefreshRules(payload->mInsName);
-                }
-            }/*}}}*/
-            return true;
-        case RET_INSTANCE_DEL:
-            if (msg->obj) {/*{{{*/
-                std::shared_ptr<InstancePayload> payload(std::dynamic_pointer_cast<InstancePayload>(msg->obj));
-                if (PT_INSTANCE_PAYLOAD == payload->type())
-                    driver->handleInstanceDel(payload->mInsName.c_str());
-            }/*}}}*/
-            return true;
-        case RET_INSTANCE_PUT:
-            if (msg->obj) {/*{{{*/
-                std::shared_ptr<InstancePayload> payload(std::dynamic_pointer_cast<InstancePayload>(msg->obj));
-                if (PT_INSTANCE_PAYLOAD == payload->type()) {
-                    driver->handleInstancePut(
-                        payload->mInsName.c_str(),
-                        payload->mSlots[0].nName.c_str(),
-                        payload->mSlots[0].nValue.c_str());
-                }
-            }/*}}}*/
-            return true;
-        case RET_CLASS_SYNC:
-            if (msg->obj) {/*{{{*/
+        case RET_CLASS_SYNC:/*{{{*/
+            if (msg->obj) {
                 std::shared_ptr<ClassPayload> payload(std::dynamic_pointer_cast<ClassPayload>(msg->obj));
                 if (PT_CLASS_PAYLOAD != payload->type()) {
                     LOGW("payload type not match!\n");
                     return false;
                 }
-                std::string path = driver->handleClassSync(
+                std::string path = ccore()->handleClassSync(
                     payload->mClsName.c_str(),
                     payload->mVersion.c_str(),
                     payload->toString().c_str());
                 if (!path.empty()) {
-                    mStore->updateClassTable(
-                        payload->mClsName.c_str(),
-                        payload->mVersion.c_str(), path.c_str());
+                    std::size_t found = path.find_last_of("/");
+                    store()->updateClassTable(payload->mClsName, payload->mVersion, path.substr(found+1));
                 }
-            }/*}}}*/
-            return true;
-        case RET_RULE_SYNC:
-            if (msg->obj) {/*{{{*/
+            }
+            return true;/*}}}*/
+        case RET_RULE_SYNC:/*{{{*/
+            if (msg->obj) {
                 std::shared_ptr<RulePayload> payload(std::dynamic_pointer_cast<RulePayload>(msg->obj));
                 if (PT_RULE_PAYLOAD != payload->type()) {
                     LOGW("payload type not match!\n");
                     return false;
                 }
-                std::string path = driver->handleRuleSync(
-                    payload->mRuleName.c_str(),
+                /* build rule construct in core clips */
+                std::string path = ccore()->handleRuleSync(
+                    payload->mRuleID.c_str(),
                     payload->mVersion.c_str(),
                     payload->toString().c_str());
-                if (!path.empty()) {
-                    mStore->updateRuleTable(
-                        payload->mRuleName.c_str(),
-                        payload->mVersion.c_str(), path.c_str());
-                    driver->handleRuleAdd(payload->mRuleName.c_str());
+                if (path.empty())
+                    return false;
+                /* update sqlite db */
+                std::size_t found = path.find_last_of("/");
+                store()->updateRuleTable(payload->mRuleID, payload->mVersion, path.substr(found+1));
+                std::string eids;
+                TimerEvent::pointer eptr;
+                /* timer events of the rule */
+                for (size_t i = 0; i < payload->mTimerEvents.size(); ++i) {
+                    TimerEventInfo info;
+                    eptr = std::dynamic_pointer_cast<TimerEvent>(payload->mTimerEvents[i]);
+                    info.mID = eptr->getID();
+                    info.mYear = eptr->year()->toString();
+                    info.mMonth = eptr->month()->toString();
+                    if (eptr->getFlag())
+                        info.mWeek = eptr->week()->toString();
+                    else
+                        info.mDay = eptr->day()->toString();
+                    info.mHour = eptr->hour()->toString();
+                    info.mMinute = eptr->minute()->toString();
+                    info.mSecond = eptr->second()->toString();
+                    /* modify table of TimerEvent */
+                    store()->updateTimerEvent(info);
+                    /* add event to timer */
+                    timer()->addEvent(payload->mRuleID, eptr);
+                    eids.append(int2String(eptr->getID())).append(";");
                 }
-            }/*}}}*/
-            return true;
-        case RET_TRIGGER_RULE:
-            if (msg->obj) {/*{{{*/
+                /* modify table of DefRule for timers */
+                store()->updateRuleForTimers(payload->mRuleID, eids);
+                /* check enable of the rule */
+                if (payload->mEnable)
+                    enableRule(payload->mRuleID, isUrgent());
+                else
+                    disableRule(payload->mRuleID, isUrgent());
+            }
+            return true;/*}}}*/
+        case RET_RULE_DELETE:/*{{{*/
+            if (msg->obj) {
+                std::shared_ptr<StringData> ruleId(std::dynamic_pointer_cast<StringData>(msg->obj));
+                /* retract rule */
+                if (ccore()->disableRule(ruleId->getData())) {
+                    /* stop timers of the rule */
+                    timer()->stop(ruleId->getData());
+                    /* delete rule from db */
+                    store()->deleteRule(ruleId->getData());
+                }
+            }
+            return true;/*}}}*/
+        case RET_INSTANCE_ADD:/*{{{*/
+            if (msg->obj) {
+                std::shared_ptr<InstancePayload> payload(std::dynamic_pointer_cast<InstancePayload>(msg->obj));
+                if (PT_INSTANCE_PAYLOAD == payload->type()) {
+                    if (ccore()->handleInstanceAdd(payload->mInsName.c_str(), payload->mClsName.c_str()))
+                        _OnlineInstanceRefreshRules(payload->mInsName);
+                }
+            }
+            return true;/*}}}*/
+        case RET_INSTANCE_DEL:/*{{{*/
+            if (msg->obj) {
+                std::shared_ptr<InstancePayload> payload(std::dynamic_pointer_cast<InstancePayload>(msg->obj));
+                if (PT_INSTANCE_PAYLOAD == payload->type())
+                    ccore()->handleInstanceDel(payload->mInsName.c_str());
+            }
+            return true;/*}}}*/
+        case RET_INSTANCE_PUT:/*{{{*/
+            if (msg->obj) {
+                std::shared_ptr<InstancePayload> payload(std::dynamic_pointer_cast<InstancePayload>(msg->obj));
+                if (PT_INSTANCE_PAYLOAD == payload->type()) {
+                    ccore()->handleInstancePut(
+                        payload->mInsName.c_str(),
+                        payload->mSlots[0].nName.c_str(),
+                        payload->mSlots[0].nValue.c_str());
+                }
+            }
+            return true;/*}}}*/
+        case RET_TRIGGER_SCENE:/*{{{*/
+            if (msg->obj) {
                 std::shared_ptr<StringData> assert(std::dynamic_pointer_cast<StringData>(msg->obj));
-                int count = driver->assertRun(assert->getData());
-                if (count > 0)
-                    LOGD("trigger rule agenda [%d]\n", count);
-            }/*}}}*/
-            return true;
+                ccore()->assertRun(assert->getData());
+            }
+            return true;/*}}}*/
+        case RET_SWITCH_RULE:/*{{{*/
+            switch (msg->arg1) {
+                case ENUM_ENABLE:
+                    if (msg->obj) {
+                        std::shared_ptr<StringData> ruleId(std::dynamic_pointer_cast<StringData>(msg->obj));
+                        /* enable clips rule */
+                        if (ccore()->enableRule(ruleId->getData())) {
+                            /* modify sqlite db */
+                            store()->updateRuleForEnable(ruleId->getData(), true);
+                            /* start timer event */
+                            timer()->start(ruleId->getData());
+                        }
+                    }
+                    break;
+                case ENUM_DISABLE:
+                    if (msg->obj) {
+                        std::shared_ptr<StringData> ruleId(std::dynamic_pointer_cast<StringData>(msg->obj));
+                        /* disable clips rule */
+                        if (ccore()->disableRule(ruleId->getData())) {
+                            /* modify sqlite db */
+                            store()->updateRuleForEnable(ruleId->getData(), false);
+                            /* stop timer event */
+                            timer()->stop(ruleId->getData());
+                        }
+                    }
+                    break;
+                default:
+                    return false;
+            }
+            return true;/*}}}*/
+        case RET_TIMER_EVENT:/*{{{*/
+            switch (msg->arg1) {
+                case TIMER_TOPLAY:
+                    assert.append("(timer-event (id ").append(int2String(msg->arg2)).append("))");
+                    break;
+                case TIMER_DURATION:
+                    assert.append("(remove-timer-event ").append(int2String(msg->arg2)).append(")");
+                    break;
+                default:
+                    return false;
+            }
+            ccore()->assertRun(assert.c_str());
+            return true;/*}}}*/
         default:
             return false;
     }
     return false;
 }
 
-void RuleEngineService::RuleUrgentThread::run()
-{
-    LOGI("Rule RuleUrgentThread:[%u]\n", id());
-    mService.mUrgentHandler = std::make_shared<RuleEventHandler>();
-    mService.mUrgentHandler->mCallback = &mService;
-    return RuleEventThread::run();
-}
-
-bool RuleEngineService::_OfflineInstanceCalledByRHS(std::string &insName, std::string &rulName)
+bool RuleEngineService::_OfflineInstanceCalledByRHS(std::string &insName, std::string &ruleId)
 {
     LOGTT();
+    if (!mEnableRefreshRule)
+        return false;
     std::map<std::string, std::set<std::string>>::iterator it = mOfflineInsesCalled.find(insName);
     if (it != mOfflineInsesCalled.end()) {
-        it->second.insert(rulName);
+        it->second.insert(ruleId);
         return true;
     }
     std::set<std::string> rules;
-    rules.insert(rulName);
+    rules.insert(ruleId);
     mOfflineInsesCalled.insert(std::pair<std::string, std::set<std::string>>(insName, rules));
     return true;
 }
@@ -214,12 +305,14 @@ bool RuleEngineService::_OfflineInstanceCalledByRHS(std::string &insName, std::s
 bool RuleEngineService::_OnlineInstanceRefreshRules(std::string &insName)
 {
     LOGTT();
+    if (!mEnableRefreshRule)
+        return false;
     std::map<std::string, std::set<std::string>>::iterator it = mOfflineInsesCalled.find(insName);
     if (it == mOfflineInsesCalled.end())
         return true;
     std::set<std::string>::iterator si;
     for ( si = it->second.begin(); si != it->second.end(); ++si)
-        mCore->refreshRule((*si).c_str());
+        mCoreForNormal->refreshRule((*si).c_str());
     return true;
 }
 
@@ -270,15 +363,37 @@ bool RuleEngineService::callContentPush(std::string id, std::string title, std::
     return true; /* synchronous */
 }
 
-bool RuleEngineService::triggerRule(std::string ruleId)
+bool RuleEngineService::triggerRule(std::string ruleId, bool urgent)
 {
-    LOGD("ruleId: %s\n", ruleId.c_str());
-    if (!mCore)
-        return false;
+    LOGD("(%s, %d)\n", ruleId.c_str(), urgent);
     std::string assert("");
     assert.append("(scene ").append(ruleId).append(")");
     std::shared_ptr<StringData> data = std::make_shared<StringData>(assert.c_str());
-    return ruleHandler().sendMessage(ruleHandler().obtainMessage(RET_TRIGGER_RULE, data));
+    if (!urgent)
+        return ruleHandler().sendMessage(ruleHandler().obtainMessage(RET_TRIGGER_SCENE, data));
+    return urgentHandler().sendMessage(urgentHandler().obtainMessage(RET_TRIGGER_SCENE, data));
+}
+
+bool RuleEngineService::enableRule(std::string ruleId, bool urgent)
+{
+    LOGD("(%s, %d)\n", ruleId.c_str(), urgent);
+    std::shared_ptr<StringData> data = std::make_shared<StringData>(ruleId.c_str());
+    if (!urgent)
+        return ruleHandler().sendMessage(ruleHandler().obtainMessage(
+                RET_SWITCH_RULE, ENUM_ENABLE, 0, data));
+    return urgentHandler().sendMessage(urgentHandler().obtainMessage(
+            RET_SWITCH_RULE, ENUM_ENABLE, 0, data));
+}
+
+bool RuleEngineService::disableRule(std::string ruleId, bool urgent)
+{
+    LOGD("(%s, %d)\n", ruleId.c_str(), urgent);
+    std::shared_ptr<StringData> data = std::make_shared<StringData>(ruleId.c_str());
+    if (!urgent)
+        return ruleHandler().sendMessage(ruleHandler().obtainMessage(
+                RET_SWITCH_RULE, ENUM_DISABLE, 0, data));
+    return urgentHandler().sendMessage(urgentHandler().obtainMessage(
+            RET_SWITCH_RULE, ENUM_DISABLE, 0, data));
 }
 
 std::vector<std::string> RuleEngineService::callGetFiles(int fileType, bool urgent)
@@ -300,20 +415,23 @@ std::vector<std::string> RuleEngineService::callGetFiles(int fileType, bool urge
     return std::move(files);
 }
 
+void RuleEngineService::debug(int show, bool urgent)
+{
+    if (urgent)
+        urgentHandler().sendMessage(urgentHandler().obtainMessage(
+                RET_DEBUG, show, 0));
+    else
+        ruleHandler().sendMessage(ruleHandler().obtainMessage(
+                RET_DEBUG, show, 0));
+}
+
 RuleEngineService& ruleEngine()
 {
-    if (0 == gRuleEngine) {
+    if (0 == gRuleEngine)
         gRuleEngine = new RuleEngineService();
-        ruleHandler().mCallback = gRuleEngine;
-    }
     return *gRuleEngine;
 }
 
-RuleEventHandler& urgentHandler()
-{
-    /* TODO Dangerous API, must call this after RuleEngineService::init() */
-    return *(ruleEngine().urgentHandler().get());
-}
 
 } /* namespace HB */
 

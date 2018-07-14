@@ -1,18 +1,18 @@
 /***************************************************************************
- *  RuleTimerEvent.cpp - Rule Event Timer
+ *  TimerEvent.cpp - Rule Event Timer
  *
  *  Created: 2018-07-09 18:18:38
  *
  *  Copyright QRS
  ****************************************************************************/
 
-#include "RuleTimerEvent.h"
+#include "TimerEvent.h"
+#include "Mutex.h"
+#include "Log.h"
+#include "Common.h"
 
-#include <signal.h>
 #include <stdio.h>
 #include <string.h>
-#include "Log.h"
-
 #include <map>
 
 #define DAY_SECONDS 86400
@@ -25,15 +25,8 @@ TimeNode::TimeNode(TimeNodeType ntype, TimeValueType vtype)
     , mNodeType(ntype), mValueType(vtype)
     , mReset(false), mCurrent(RET_NOVAL)
 {
-    if (mValueType == eNull) {
-        switch (mNodeType) {
-            case eMonth:
-            case eDay:
-                mCurrent = 1;
-            default:
-                mCurrent = 0;
-        }
-    }
+    if (mValueType == eNull)
+        mCurrent = _GetRealMinValue();
 }
 
 TimeNode::~TimeNode()
@@ -42,6 +35,14 @@ TimeNode::~TimeNode()
     if (mNextNode)
         delete mNextNode;
     mNextNode = 0;
+}
+
+TimeNode& TimeNode::setValueType(TimeValueType type)
+{
+    if (type == eNull)
+        mCurrent = _GetRealMinValue();
+    mValueType = type;
+    return *this;
 }
 
 TimeNode* TimeNode::setNextNode(TimeNode *node)
@@ -79,6 +80,16 @@ int TimeNode::_UpdateValue(int max)
             break;
         case eNull:
             return RET_NULL;
+        case eNot:
+            if (mCurrent < max)
+                val++;
+            for (mCurrent; mCurrent < max; mCurrent++) {
+                for (auto it = mValues.begin(); it != mValues.end(); ++it) {
+                    if (mCurrent != (*it))
+                        break;
+                }
+            }
+            break;
     }
     if (mCurrent != val) {
         mCurrent = val;
@@ -101,14 +112,7 @@ int TimeNode::_ResetValue(bool flag)
 
     switch (mValueType) {
         case eAny:
-            switch (mNodeType) {
-                case eDay:
-                case eMonth:
-                    mCurrent = 1;
-                    break;
-                default:
-                    mCurrent = 0;
-            }
+            mCurrent = _GetRealMinValue();
             break;
         case eRange:
             mCurrent = mMin;
@@ -117,6 +121,17 @@ int TimeNode::_ResetValue(bool flag)
             mCurrent = *(mValues.begin());
             break;
         case eNull:
+            mCurrent = _GetRealMinValue();
+            break;
+        case eNot:
+            mCurrent = _GetRealMinValue();
+            for (mCurrent; mCurrent < _GetRealMaxValue(); mCurrent++) {
+                for (auto it = mValues.begin(); it != mValues.end(); ++it) {
+                    if (mCurrent != (*it))
+                        break;
+                }
+            }
+            break;
         default:
             break;
     }
@@ -144,7 +159,118 @@ int TimeNode::_GetMaxDay(int year, int month)
     return day;
 }
 
-int TimeYear::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
+int TimeNode:: _GetRealMinValue()
+{
+    int val;
+    switch (mNodeType) {
+        case eYear:
+            val = 2018;
+            break;
+        case eDay:
+        case eMonth:
+            val = 1;
+            break;
+        default:
+            val = 0;
+    }
+    return val;
+}
+
+int TimeNode:: _GetRealMaxValue()
+{
+    int val;
+    switch (mNodeType) {
+        case eYear:
+            val = 2099;
+            break;
+        case eDay:
+            val = 31;
+        case eMonth:
+            val = 12;
+            break;
+        case eWeek:
+            val = 6;
+            break;
+        default:
+            val = 59;
+    }
+    return val;
+}
+
+std::string TimeNode::toString()
+{
+    std::string str;
+    switch (valueType()) {
+        case eAny:
+            str.append("any;");
+            break;
+        case eRange:
+            str.append("range;");
+            str.append(int2String(mMin)).append(";");
+            str.append(int2String(mMax)).append(";");
+            break;
+        case eSet:
+            str.append("set;");
+            for (auto it = mValues.begin(); it != mValues.end(); ++it) {
+                str.append(int2String(*it)).append(";");
+            }
+            break;
+        case eNull:
+            str.append("null;");
+            break;
+        case eNot:
+            str.append("not;");
+            for (auto it = mValues.begin(); it != mValues.end(); ++it) {
+                str.append(int2String(*it)).append(";");
+            }
+            break;
+            break;
+        default:
+            break;
+    }
+    return std::move(str);
+}
+
+TimeNode& TimeNode::resetFromString(const std::string &str)
+{
+    char *type = strtok((char*)str.c_str(), ";");
+    if (!type) {
+        LOGW("FIXME!\n");
+        return *this;
+    }
+
+    if (!strcmp(type, "any")) {
+        setValueType(eAny);
+    } else if (!strcmp(type, "range")) {
+        setValueType(eRange);
+        char *min = strtok(NULL, ";");
+        char *max = strtok(NULL, ";");
+        if (!min || !max) {
+            LOGW("FIXME!\n");
+            return *this;
+        }
+        setRange(atoi(min), atoi(max));
+    } else if (!strcmp(type, "set")) {
+        setValueType(eSet);
+        char *set = strtok(NULL, ";");
+        while (set) {
+            append(atoi(set));
+            set = strtok(NULL, ";");
+        }
+    } else if (!strcmp(type, "null")) {
+        setValueType(eNull);
+    } else if (!strcmp(type, "not")) {
+        setValueType(eNot);
+        char *set = strtok(NULL, ";");
+        while (set) {
+            append(atoi(set));
+            set = strtok(NULL, ";");
+        }
+    }
+    return *this;
+}
+
+int TimeYear::nextValue(SysTime::DateTime &dt, time_t &duration, bool adjust)
 {
     LOGI("adjust = [%d]\n", adjust);
     int val = current();
@@ -156,7 +282,7 @@ int TimeYear::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
         }
         LOGD("TimeYear = [%d]\n", val);
     }
-    int ret = nextNode()->nextDate(dt, elapse, adjust ? val <= dt.mYear : false);
+    int ret = nextNode()->nextValue(dt, duration, adjust ? val <= dt.mYear : false);
     if (ret == RET_IGNORE)
         return ret;
     switch (ret) {
@@ -166,7 +292,7 @@ int TimeYear::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
             if (val == RET_NOVAL)
                 return RET_RESET;
             if (ret != RET_NULL)
-                nextNode()->nextDate(dt, elapse, false);
+                nextNode()->nextValue(dt, duration, false);
             break;
         case RET_OK:
         default:
@@ -174,12 +300,12 @@ int TimeYear::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
     }
     dt.mYear = current();
     setResetFlag(false);
-    if (0 == elapse)
-        elapse = 366 * DAY_SECONDS;
+    if (0 == duration)
+        duration = 366 * DAY_SECONDS;
     return RET_OK;
 }
 
-int TimeMonth::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
+int TimeMonth::nextValue(SysTime::DateTime &dt, time_t &duration, bool adjust)
 {
     LOGI("adjust = [%d]\n", adjust);
     int val = current();
@@ -191,7 +317,7 @@ int TimeMonth::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
         }
         LOGD("TimeMonth = [%d]\n", val);
     }
-    int ret = nextNode()->nextDate(dt, elapse, adjust ? val <= dt.mMonth : false);
+    int ret = nextNode()->nextValue(dt, duration, adjust ? val <= dt.mMonth : false);
     if (ret == RET_IGNORE)
         return ret;
     switch (ret) {
@@ -201,7 +327,7 @@ int TimeMonth::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
             if (val == RET_NOVAL)
                 return RET_RESET;
             if (ret != RET_NULL)
-                nextNode()->nextDate(dt, elapse, false);
+                nextNode()->nextValue(dt, duration, false);
             break;
         case RET_OK:
         default:
@@ -209,13 +335,13 @@ int TimeMonth::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
     }
     dt.mMonth = current();
     setResetFlag(false);
-    if (0 == elapse)
-        elapse = _GetMaxDay(dt.mYear, dt.mMonth) * DAY_SECONDS;
+    if (0 == duration)
+        duration = _GetMaxDay(dt.mYear, dt.mMonth) * DAY_SECONDS;
     LOGD("TimeMonth = [%d]\n", current());
     return RET_OK;
 }
 
-int TimeWeek::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
+int TimeWeek::nextValue(SysTime::DateTime &dt, time_t &duration, bool adjust)
 {
     LOGI("adjust = [%d]\n", adjust);
     int val = current();
@@ -227,7 +353,7 @@ int TimeWeek::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
         }
         LOGD("TimeWeek = [%d]\n", val);
     }
-    int ret = nextNode()->nextDate(dt, elapse, adjust ? val <= dt.mDayOfWeek : false);
+    int ret = nextNode()->nextValue(dt, duration, adjust ? val <= dt.mDayOfWeek : false);
     switch (ret) {
         case RET_NULL:
         case RET_RESET:
@@ -235,7 +361,7 @@ int TimeWeek::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
             if (val == RET_NOVAL)
                 val = _ResetValue() + 7;
             if (ret != RET_NULL)
-                nextNode()->nextDate(dt, elapse, false);
+                nextNode()->nextValue(dt, duration, false);
             dt = secondsToDateTime(
                 dateTimeToSeconds(dt) + (val-dt.mDayOfWeek)*DAY_SECONDS);
             return RET_IGNORE;
@@ -245,12 +371,12 @@ int TimeWeek::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
     }
     dt.mDayOfWeek = current();
     setResetFlag(false);
-    if (0 == elapse)
-        elapse = 7 * DAY_SECONDS;
+    if (0 == duration)
+        duration = 7 * DAY_SECONDS;
     return RET_OK;
 }
 
-int TimeDay::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
+int TimeDay::nextValue(SysTime::DateTime &dt, time_t &duration, bool adjust)
 {
     LOGI("adjust = [%d]\n", adjust);
     int days = _GetMaxDay(dt.mYear, dt.mMonth);
@@ -264,7 +390,7 @@ int TimeDay::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
         }
         LOGD("TimeDay = [%d]\n", val);
     }
-    int ret = nextNode()->nextDate(dt, elapse, adjust ? val <= dt.mDay : false);
+    int ret = nextNode()->nextValue(dt, duration, adjust ? val <= dt.mDay : false);
     switch (ret) {
         case RET_NULL:
         case RET_RESET:
@@ -272,7 +398,7 @@ int TimeDay::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
             if (val == RET_NOVAL)
                 return RET_RESET;
             if (ret != RET_NULL)
-                nextNode()->nextDate(dt, elapse, false);
+                nextNode()->nextValue(dt, duration, false);
             break;
         case RET_OK:
         default:
@@ -280,17 +406,17 @@ int TimeDay::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
     }
     dt.mDay = current();
     setResetFlag(false);
-    if (0 == elapse)
-        elapse = DAY_SECONDS;
+    if (0 == duration)
+        duration = DAY_SECONDS;
     return RET_OK;
 }
 
-int TimeHour::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
+int TimeHour::nextValue(SysTime::DateTime &dt, time_t &duration, bool adjust)
 {
     LOGI("adjust = [%d]\n", adjust);
     if (valueType() == eNull) {
         dt.mHour = current();
-        return nextNode()->nextDate(dt, elapse, adjust);
+        return nextNode()->nextValue(dt, duration, adjust);
     }
     int val = current();
     if (adjust) {
@@ -301,7 +427,7 @@ int TimeHour::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
         }
         LOGD("TimeHour = [%d]\n", val);
     }
-    int ret = nextNode()->nextDate(dt, elapse, adjust ? val <= dt.mHour : false);
+    int ret = nextNode()->nextValue(dt, duration, adjust ? val <= dt.mHour : false);
     switch (ret) {
         case RET_NULL:
         case RET_RESET:
@@ -309,7 +435,7 @@ int TimeHour::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
             if (val == RET_NOVAL)
                 return RET_RESET;
             if (ret != RET_NULL)
-                nextNode()->nextDate(dt, elapse, false);
+                nextNode()->nextValue(dt, duration, false);
             break;
         case RET_OK:
         default:
@@ -317,17 +443,17 @@ int TimeHour::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
     }
     dt.mHour = current();
     setResetFlag(false);
-    if (0 == elapse)
-        elapse = 3600;
+    if (0 == duration)
+        duration = 3600;
     return RET_OK;
 }
 
-int TimeMinute::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
+int TimeMinute::nextValue(SysTime::DateTime &dt, time_t &duration, bool adjust)
 {
     LOGI("adjust = [%d]\n", adjust);
     if (valueType() == eNull) {
         dt.mMinute = current();
-        return nextNode()->nextDate(dt, elapse, adjust);
+        return nextNode()->nextValue(dt, duration, adjust);
     }
     int val = current();
     if (adjust) {
@@ -338,7 +464,7 @@ int TimeMinute::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
         }
         LOGD("TimeMinute = [%d]\n", val);
     }
-    int ret = nextNode()->nextDate(dt, elapse, adjust ? val <= dt.mMinute : false);
+    int ret = nextNode()->nextValue(dt, duration, adjust ? val <= dt.mMinute : false);
     switch (ret) {
         case RET_NULL:
         case RET_RESET:
@@ -346,7 +472,7 @@ int TimeMinute::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
             if (val == RET_NOVAL)
                 return RET_RESET;
             if (ret != RET_NULL)
-                nextNode()->nextDate(dt, elapse, false);
+                nextNode()->nextValue(dt, duration, false);
             break;
         case RET_OK:
         default:
@@ -354,12 +480,12 @@ int TimeMinute::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
     }
     dt.mMinute = current();
     setResetFlag(false);
-    if (0 == elapse)
-        elapse = 60;
+    if (0 == duration)
+        duration = 60;
     return RET_OK;
 }
 
-int TimeSecond::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
+int TimeSecond::nextValue(SysTime::DateTime &dt, time_t &duration, bool adjust)
 {
     LOGI("adjust = [%d]\n", adjust);
     if (valueType() == eNull) {
@@ -381,72 +507,35 @@ int TimeSecond::nextDate(SysTime::DateTime &dt, time_t &elapse, bool adjust)
         return RET_RESET;
     dt.mSecond = current();
     setResetFlag(false);
-    elapse = 1;
+    duration = 1;
     return RET_OK;
 }
 
+TimerEvent::TimerEvent(int eventid, bool weekflag)
+    : mEventID(eventid), mWeekFlag(weekflag)
 
-typedef std::map<int, RuleTimerEvent*> TimerEvents;
-
-static TimerEvents gTimers;
-
-static void _TimerThread(union sigval v)
 {
-    LOGTT();
-    TimerEvents::iterator it = gTimers.find(v.sival_int);
-    if (it == gTimers.end())
-        return;
-    time_t elapse = 0;
-    SysTime::DateTime dt;
-    SysTime::GetDateTime(&dt);
-    int secs1 = dateTimeToSeconds(dt);
-    int ret = it->second->nextDate(dt, elapse);
-    if (ret < 0) {
-        delete it->second;
-        gTimers.erase(it);
-        return;
-    }
-    LOGD("%04d%02d%02d %02d:%02d:%02d %lu\n", dt.mYear, dt.mMonth, dt.mDay, dt.mHour, dt.mMinute, dt.mSecond, elapse);
-    int secs2 = dateTimeToSeconds(dt);
-    if (secs2 > secs1) {
-        it->second->startTimer(secs2 - secs1);
-    } else
-        LOGE("check me!\n");
-}
-
-RuleTimerEvent::RuleTimerEvent(int eventid, bool flag)
-    : mNodeHeader(0)
-    , mEventID(eventid), mTimerID(0)
-{
-    if (gTimers.size() > MAX_TIMER_EVENTS) {
-        LOGE("beyond the max value\n");
-        return;
-    }
-
-    gTimers.insert(std::pair<int, RuleTimerEvent*>(eventid, this));
-
     /* Year / Month / Week|Day / Hour / Minute / Second */
-    TimeNode *node = new TimeYear(eAny);
-    mNodeHeader = node;
+    mHeader = new TimeYear(eAny);
+    TimeNode *node = mHeader;
     node = node->setNextNode(new TimeMonth(eAny));
-    node = node->setNextNode(flag ? (TimeNode*)(new TimeWeek(eAny)) : (TimeNode*)(new TimeDay(eAny)));
+    node = node->setNextNode(weekflag ? (TimeNode*)(new TimeWeek(eAny)) : (TimeNode*)(new TimeDay(eAny)));
     node = node->setNextNode(new TimeHour(eNull));
     node = node->setNextNode(new TimeMinute(eNull));
     node = node->setNextNode(new TimeSecond(eNull));
 }
 
-RuleTimerEvent::~RuleTimerEvent()
+TimerEvent::~TimerEvent()
 {
     LOGTT();
-    cancelTimer();
-    if (mNodeHeader)
-        delete mNodeHeader;
-    mNodeHeader = 0;
+    if (mHeader)
+        delete mHeader;
+    mHeader = 0;
 }
 
-TimeNode* RuleTimerEvent::getTimeNode(TimeNodeType type)
+TimeNode* TimerEvent::getTimeNode(TimeNodeType type)
 {
-    TimeNode *node = mNodeHeader;
+    TimeNode *node = mHeader;
     while (node) {
         if (node->type() == type)
             return node;
@@ -455,52 +544,11 @@ TimeNode* RuleTimerEvent::getTimeNode(TimeNodeType type)
     return 0;
 }
 
-int RuleTimerEvent::startTimer(time_t secs)
+int TimerEvent::nextDate(SysTime::DateTime &dt, time_t &duration)
 {
-	timer_t timerid;
-	struct sigevent evp;
-	memset(&evp, 0, sizeof(struct sigevent));
-
-    cancelTimer();
-
-    /* evp.sigev_value.sival_ptr = (void*)this; */
-	evp.sigev_value.sival_int = mEventID;
-	evp.sigev_notify = SIGEV_THREAD;
-	evp.sigev_notify_function = _TimerThread;
-
-	if (timer_create(CLOCK_REALTIME, &evp, &timerid) == -1) {
-        LOGE("create timer error!\n");
+    if (!mHeader)
         return -1;
-	}
-
-    LOGD("startTimer [%ld]\n", secs);
-
-	struct itimerspec it;
-	it.it_interval.tv_sec = secs;
-	it.it_interval.tv_nsec = 0;
-	it.it_value.tv_sec = secs;
-	it.it_value.tv_nsec = 0;
-	if (timer_settime(timerid, 0, &it, NULL) == -1) {
-        LOGE("set timer error!\n");
-        timer_delete(timerid);
-        return -1;
-	}
-    mTimerID = timerid;
-    return 0;
-}
-
-int RuleTimerEvent::cancelTimer()
-{
-    if (mTimerID == 0)
-        return -1;
-    return timer_delete(mTimerID);
-}
-
-int RuleTimerEvent::nextDate(SysTime::DateTime &dt, time_t &elapse)
-{
-    if (!mNodeHeader)
-        return -1;
-    int ret = mNodeHeader->nextDate(dt, elapse, true);
+    int ret = mHeader->nextValue(dt, duration, true);
     if (ret != RET_OK)
         return -1;
     return 0;

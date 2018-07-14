@@ -13,6 +13,7 @@
 #include "DataChannel.h"
 #include "RuleEventThread.h"
 #include "RuleEngineStore.h"
+#include "RuleEngineTimer.h"
 #include "RuleEngineCore.h"
 #include "RuleEventHandler.h"
 
@@ -42,46 +43,50 @@ public:
     bool callMessagePush(int what, int arg1, std::string arg2, std::string message);
     bool callInstancePush(std::string insName, std::string slot, std::string value);
     bool callContentPush(std::string id, std::string title, std::string content);
-    bool triggerRule(std::string ruleId);
+    bool triggerRule(std::string ruleId, bool urgent = false);
+    bool enableRule(std::string ruleId, bool urgent = false);
+    bool disableRule(std::string ruleId, bool urgent = false);
 
     std::vector<std::string> callGetFiles(int fileType, bool urgent);
 
-    RuleEngineStore::pointer store() { return mStore; }
-    RuleEngineCore::pointer core() { return mCore; }
+    RuleEngineCore::pointer coreForNormal() { return mCoreForNormal; }
     RuleEngineCore::pointer coreForUrgent() { return mCoreForUrgent; }
-    RuleEventHandler::pointer urgentHandler() { return mUrgentHandler; }
 
-    class RuleUrgentThread : public RuleEventThread {
-    public:
-        RuleUrgentThread(RuleEngineService &service) : mService(service) {}
-        ~RuleUrgentThread(){}
-        void run();
-    private:
-        RuleEngineService &mService;
-    };
+    bool isUrgent() { return (mCoreForUrgent && pthread_self() != ruleHandler().id()); }
+
+    void debug(int show, bool urgent = false);
 
 private:
+    friend class RuleEventHandler;
+    inline RuleEngineCore::pointer ccore();
+    inline RuleEngineStore::pointer store() { return mStore; }
+    inline RuleEngineTimer::pointer timer() { return mTimer; }
+
     bool _OfflineInstanceCalledByRHS(std::string &insName, std::string &rulName);
     bool _OnlineInstanceRefreshRules(std::string &insName);
 
 private:
-    friend class RuleEventThread;
     std::string mServerRoot;
-    RuleEngineCore::pointer mCore;
+    RuleEngineCore::pointer mCoreForNormal;
     RuleEngineCore::pointer mCoreForUrgent;
-    RuleEventHandler::pointer mUrgentHandler;
 
+    RuleEngineTimer::pointer mTimer;
     RuleEngineStore::pointer mStore;
     DataChannel::pointer mRuleChannel;
     DataChannel::pointer mClassChannel;
 
+    bool mEnableRefreshRule;
     std::map<std::string, std::set<std::string>> mOfflineInsesCalled;
-
 }; /* class RuleEngineService */
 
-RuleEngineService& ruleEngine();
+RuleEngineCore::pointer RuleEngineService::ccore()
+{
+    if (isUrgent())
+        return mCoreForUrgent;
+    return mCoreForNormal;
+}
 
-RuleEventHandler& urgentHandler();
+RuleEngineService& ruleEngine();
 
 } /* namespace HB */
 

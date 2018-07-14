@@ -37,3 +37,10 @@ HomeBrain工程编译调试
 1. `cd $TOP_DIR`
 
 2. `make linux DIR=homebrain/src/rule-engine`
+
+TODO:
+
+```
+select * from sqlite_master where type = "table"
+.schema
+```

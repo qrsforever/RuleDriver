@@ -20,16 +20,19 @@ class RuleEventHandler : public ::UTILS::MessageHandler {
 public:
     typedef std::shared_ptr<RuleEventHandler> pointer;
 
-    RuleEventHandler(::UTILS::MessageQueue *queue);
-    RuleEventHandler();
+    RuleEventHandler(::UTILS::MessageQueue *queue, pthread_t id);
     ~RuleEventHandler();
+
+    pthread_t id() { return mID; }
 
 protected:
     void handleMessage(::UTILS::Message *msg);
+    pthread_t mID;
 
 }; /* class RuleEventHandler */
 
 RuleEventHandler& ruleHandler();
+RuleEventHandler& urgentHandler();
 
 } /* namespace HB */
 
