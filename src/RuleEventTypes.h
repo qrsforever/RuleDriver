@@ -13,6 +13,7 @@
 #define RET_REFRESH_TIMER       1           /* Rule Event Type: refresh timer */
 #define RET_STORE_CLOSE         2           /* Rule Event Type: close store database */
 #define RET_TIMER_EVENT         3           /* Rule Event Type: timer event */
+#define RET_LOG_LEVEL           4           /* Rule Event Type: clips log level */
 
 #define RET_RULE_SYNC           11          /* Rule Event Type: rule sync from cloud */
 #define RET_CLASS_SYNC          12          /* Rule Event Type: class profile sync */

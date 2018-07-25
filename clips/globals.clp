@@ -38,6 +38,13 @@
 ;   Global Template
 ;-----------------------------------------------------------------
 
+; scene mode
+(deftemplate scene-mode
+    (slot zone (type SYMBOL))
+    (slot from (type SYMBOL) (default none))
+    (slot to (type SYMBOL) (default none))
+)
+
 ; timer event
 (deftemplate timer-event
     (slot id)
@@ -54,13 +61,13 @@
     (slot ID     (visibility public) (type SYMBOL))
     (slot Class  (visibility public) (type SYMBOL) (access initialize-only))
     (slot UUID   (visibility public) (type STRING))
-    (slot insCnt (type INTEGER) (storage shared) (default 0))
+    ; (slot insCnt (type INTEGER) (storage shared) (default 0))
 )
 
 (defmessage-handler DEVICE init after ()
     (bind ?self:ID (instance-name-to-symbol (instance-name ?self)))
     (bind ?self:Class (class ?self))
-    (bind ?self:insCnt (+ ?self:insCnt 1))
+    ; (bind ?self:insCnt (+ ?self:insCnt 1))
 )
 
 ;-----------------------------------------------------------------
@@ -102,6 +109,16 @@
     ?f <- (rule-response ?id $?)
   =>
     (retract ?f)
+)
+
+; trigger scene enter
+(defrule scene-enter-mode
+    (declare (salience ?*SALIENCE-HIGHER*))
+    ?f1 <- (scene-enter ?zone ?mode)
+    ?f2 <- (scene-mode (zone ?zone) (to ?to))
+  =>
+    (retract ?f1)
+    (modify ?f2 (from ?to) (to ?mode))
 )
 
 ; remove the timer-event

@@ -14,7 +14,7 @@
 #include "StringData.h"
 #include "Message.h"
 #include "Common.h"
-#include "Log.h"
+#include "RuleEngineLog.h"
 #include "RuleEngineTimer.h"
 
 #define RULE_DB_NAME "ruleengine.db"
@@ -29,12 +29,12 @@ RuleEngineService::RuleEngineService()
     , mRuleChannel(0), mClassChannel(0)
     , mEnableRefreshRule(false)
 {
-    LOGTT();
+    RE_LOGTT();
 }
 
 RuleEngineService::~RuleEngineService()
 {
-    LOGTT();
+    RE_LOGTT();
     std::map<std::string, std::set<std::string>>::iterator it;
     for (it = mOfflineInsesCalled.begin(); it != mOfflineInsesCalled.end(); ++it)
         it->second.clear();
@@ -123,7 +123,7 @@ bool RuleEngineService::handleMessage(Message *msg)
     if (msg->what == RET_REFRESH_TIMER)
         return ccore()->handleTimer();
 
-    LOGD("msg: [%d] [%d] [%d]\n", msg->what, msg->arg1, msg->arg2);
+    RE_LOGD("msg: [%d] [%d] [%d]\n", msg->what, msg->arg1, msg->arg2);
 
     std::string assert;
     switch(msg->what) {
@@ -131,7 +131,7 @@ bool RuleEngineService::handleMessage(Message *msg)
             if (msg->obj) {
                 std::shared_ptr<ClassPayload> payload(std::dynamic_pointer_cast<ClassPayload>(msg->obj));
                 if (PT_CLASS_PAYLOAD != payload->type()) {
-                    LOGW("payload type not match!\n");
+                    RE_LOGW("payload type not match!\n");
                     return false;
                 }
                 std::string path = ccore()->handleClassSync(
@@ -148,7 +148,7 @@ bool RuleEngineService::handleMessage(Message *msg)
             if (msg->obj) {
                 std::shared_ptr<RulePayload> payload(std::dynamic_pointer_cast<RulePayload>(msg->obj));
                 if (PT_RULE_PAYLOAD != payload->type()) {
-                    LOGW("payload type not match!\n");
+                    RE_LOGW("payload type not match!\n");
                     return false;
                 }
                 /* build rule construct in core clips */
@@ -288,7 +288,7 @@ bool RuleEngineService::handleMessage(Message *msg)
 
 bool RuleEngineService::_OfflineInstanceCalledByRHS(std::string &insName, std::string &ruleId)
 {
-    LOGTT();
+    RE_LOGTT();
     if (!mEnableRefreshRule)
         return false;
     std::map<std::string, std::set<std::string>>::iterator it = mOfflineInsesCalled.find(insName);
@@ -304,7 +304,7 @@ bool RuleEngineService::_OfflineInstanceCalledByRHS(std::string &insName, std::s
 
 bool RuleEngineService::_OnlineInstanceRefreshRules(std::string &insName)
 {
-    LOGTT();
+    RE_LOGTT();
     if (!mEnableRefreshRule)
         return false;
     std::map<std::string, std::set<std::string>>::iterator it = mOfflineInsesCalled.find(insName);
@@ -318,7 +318,7 @@ bool RuleEngineService::_OnlineInstanceRefreshRules(std::string &insName)
 
 bool RuleEngineService::callMessagePush(int what, int arg1, std::string arg2, std::string message)
 {
-    LOGD("(%d, %d, %s, %s)\n", what, arg1, arg2.c_str(), message.c_str());
+    RE_LOGD("(%d, %d, %s, %s)\n", what, arg1, arg2.c_str(), message.c_str());
     switch (what) {
         case MSG_RULE_RESPONSE:
             switch (arg1) {/*{{{ arg2: ruleid, message: detail info */
@@ -348,7 +348,7 @@ bool RuleEngineService::callInstancePush(std::string insName, std::string slot, 
 {
     if ('#' == value[0])
         value = value.substr(1);
-    LOGD("(%s, %s, %s)\n", insName.c_str(), slot.c_str(), value.c_str());
+    RE_LOGD("(%s, %s, %s)\n", insName.c_str(), slot.c_str(), value.c_str());
 
     std::shared_ptr<InstancePayload> payload = std::make_shared<InstancePayload>();
     payload->mInsName = insName;
@@ -359,13 +359,13 @@ bool RuleEngineService::callInstancePush(std::string insName, std::string slot, 
 
 bool RuleEngineService::callContentPush(std::string id, std::string title, std::string content)
 {
-    LOGD("(%s, %s, %s)\n", id.c_str(), title.c_str(), content.c_str());
+    RE_LOGD("(%s, %s, %s)\n", id.c_str(), title.c_str(), content.c_str());
     return true; /* synchronous */
 }
 
 bool RuleEngineService::triggerRule(std::string ruleId, bool urgent)
 {
-    LOGD("(%s, %d)\n", ruleId.c_str(), urgent);
+    RE_LOGD("(%s, %d)\n", ruleId.c_str(), urgent);
     std::string assert("");
     assert.append("(scene ").append(ruleId).append(")");
     std::shared_ptr<StringData> data = std::make_shared<StringData>(assert.c_str());
@@ -376,7 +376,7 @@ bool RuleEngineService::triggerRule(std::string ruleId, bool urgent)
 
 bool RuleEngineService::enableRule(std::string ruleId, bool urgent)
 {
-    LOGD("(%s, %d)\n", ruleId.c_str(), urgent);
+    RE_LOGD("(%s, %d)\n", ruleId.c_str(), urgent);
     std::shared_ptr<StringData> data = std::make_shared<StringData>(ruleId.c_str());
     if (!urgent)
         return ruleHandler().sendMessage(ruleHandler().obtainMessage(
@@ -387,7 +387,7 @@ bool RuleEngineService::enableRule(std::string ruleId, bool urgent)
 
 bool RuleEngineService::disableRule(std::string ruleId, bool urgent)
 {
-    LOGD("(%s, %d)\n", ruleId.c_str(), urgent);
+    RE_LOGD("(%s, %d)\n", ruleId.c_str(), urgent);
     std::shared_ptr<StringData> data = std::make_shared<StringData>(ruleId.c_str());
     if (!urgent)
         return ruleHandler().sendMessage(ruleHandler().obtainMessage(
@@ -401,13 +401,13 @@ std::vector<std::string> RuleEngineService::callGetFiles(int fileType, bool urge
     std::vector<std::string> files;
     switch (fileType) {
         case TYPE_TEM_FILE:
-            files = mStore->queryTemplateFilePaths(urgent);
+            files = store()->queryTemplateFilePaths(urgent);
             break;
         case TYPE_CLS_FILE:
-            files = mStore->queryClassFilePaths(urgent);
+            files = store()->queryClassFilePaths(urgent);
             break;
         case TYPE_RUL_FILE:
-            files = mStore->queryRuleFilePaths(urgent);
+            files = store()->queryRuleFilePaths(urgent);
             break;
         default:
             break;
@@ -423,6 +423,26 @@ void RuleEngineService::debug(int show, bool urgent)
     else
         ruleHandler().sendMessage(ruleHandler().obtainMessage(
                 RET_DEBUG, show, 0));
+}
+
+std::vector<std::string> RuleEngineService::getDevices()
+{
+    return ccore()->getClassNames("UUID");
+}
+
+std::vector<std::string> RuleEngineService::getSlots(const std::string &clsName)
+{
+    return ccore()->getSlotNames(clsName.c_str());
+}
+
+std::vector<std::string> RuleEngineService::getInstaces(const std::string &clsName)
+{
+    return ccore()->getObjectNames(clsName.c_str());
+}
+
+std::string RuleEngineService::getInstanceValue(const std::string &insName, const std::string &slotName)
+{
+    return ccore()->getObjectValue(insName.c_str(), slotName.c_str());
 }
 
 RuleEngineService& ruleEngine()

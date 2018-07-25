@@ -40,7 +40,7 @@ DefRuleTable::~DefRuleTable()
 
 bool DefRuleTable::updateOrInsert(const DefRuleInfo &info)
 {
-    LOGTT();
+    SQL_LOGTT();
     SQLiteValue values[6];
     values[0] = SQLText(info.mDefName);
     values[1] = SQLText(info.mVersion);
@@ -62,7 +62,7 @@ bool DefRuleTable::updateOrInsert(const DefRuleInfo &info)
 
 std::vector<DefRuleInfo> DefRuleTable::getDefRuleInfos()
 {
-    LOGTT();
+    SQL_LOGTT();
     std::vector<DefRuleInfo> infos;
 
     std::string sql("SELECT ");
@@ -92,7 +92,7 @@ std::vector<DefRuleInfo> DefRuleTable::getDefRuleInfos()
 
 std::vector<std::string> DefRuleTable::getFilePaths()
 {
-    LOGTT();
+    SQL_LOGTT();
     std::vector<std::string> files;
     std::string sql("SELECT ");
     sql.append(DEF_FIELD_CLPPATH).append(" FROM ").append(tableName());

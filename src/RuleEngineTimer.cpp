@@ -9,7 +9,7 @@
 #include "RuleEngineTimer.h"
 #include "RuleEventHandler.h"
 #include "RuleEventTypes.h"
-#include "Log.h"
+#include "RuleEngineLog.h"
 
 #include <string.h>
 
@@ -75,7 +75,7 @@ int RuleEngineTimer::start(int eID)
     int res = RES_SUCCESS;
     for (it = mEventsMap.begin(); it != mEventsMap.end(); ++it) {
         if (_StartTimer(it->second) != RES_SUCCESS) {
-           LOGW("Start Timer[%d]\n", it->first);
+           RE_LOGW("Start Timer[%d]\n", it->first);
            res = RES_FAIL;
         }
     }
@@ -97,7 +97,7 @@ int RuleEngineTimer::stop(int eID)
     int res = RES_SUCCESS;
     for (it = mEventsMap.begin(); it != mEventsMap.end(); ++it) {
         if (_CancelTimer(it->second) != RES_SUCCESS) {
-           LOGW("Canel Timer[%d]\n", it->first);
+           RE_LOGW("Canel Timer[%d]\n", it->first);
            res = RES_FAIL;
         }
     }
@@ -113,7 +113,7 @@ int RuleEngineTimer::start(const std::string &ruleId)
     for (it = mEventsMap.begin(); it != mEventsMap.end(); ++it) {
         if (it->second->mRuleId == ruleId) {
             if (_StartTimer(it->second) != RES_SUCCESS) {
-                LOGW("Start Timer[%d]\n", it->first);
+                RE_LOGW("Start Timer[%d]\n", it->first);
                 res = RES_FAIL;
             }
         }
@@ -130,7 +130,7 @@ int RuleEngineTimer::stop(const std::string &ruleId)
     for (it = mEventsMap.begin(); it != mEventsMap.end(); ++it) {
         if (it->second->mRuleId == ruleId) {
             if (_CancelTimer(it->second) != RES_SUCCESS) {
-                LOGW("Start Timer[%d]\n", it->first);
+                RE_LOGW("Start Timer[%d]\n", it->first);
                 res = RES_FAIL;
             }
         }
@@ -145,7 +145,7 @@ bool RuleEngineTimer::send(int arg1, int arg2)
 
 void RuleEngineTimer::_sToplayTimerThread(union sigval v)
 {
-    LOGTT();
+    RE_LOGTT();
     int eID = v.sival_int;
     RuleEngineTimer *et = 0;
     std::map<int, TimerEnity*>::iterator it = mEventsMap.find(eID);
@@ -161,7 +161,7 @@ void RuleEngineTimer::_sToplayTimerThread(union sigval v)
 
 void RuleEngineTimer::_sDurationTimerThread(union sigval v)
 {
-    LOGTT();
+    RE_LOGTT();
     int eID = v.sival_int;
     RuleEngineTimer *et = 0;
     std::map<int, TimerEnity*>::iterator it = mEventsMap.find(eID);
@@ -177,15 +177,15 @@ int RuleEngineTimer::_StartTimer(TimerEnity *timer)
     SysTime::DateTime dt;
     SysTime::GetDateTime(&dt);
 
-    LOGD("%04d%02d%02d %02d:%02d:%02d %lu\n", dt.mYear, dt.mMonth, dt.mDay, dt.mHour, dt.mMinute, dt.mSecond, duration);
+    RE_LOGD("%04d%02d%02d %02d:%02d:%02d %lu\n", dt.mYear, dt.mMonth, dt.mDay, dt.mHour, dt.mMinute, dt.mSecond, duration);
     time_t secs1 = dateTimeToSeconds(dt);
     if (timer->mEventPtr->nextDate(dt, duration) < 0)
         return RES_FAIL;
     time_t secs2 = dateTimeToSeconds(dt);
-    LOGD("%04d%02d%02d %02d:%02d:%02d %lu\n", dt.mYear, dt.mMonth, dt.mDay, dt.mHour, dt.mMinute, dt.mSecond, duration);
+    RE_LOGD("%04d%02d%02d %02d:%02d:%02d %lu\n", dt.mYear, dt.mMonth, dt.mDay, dt.mHour, dt.mMinute, dt.mSecond, duration);
 
     if (secs1 < secs2 || duration < 1) {
-        LOGW("Seconds [%ld vs %ld] [%ld]\n", secs1, secs2, duration);
+        RE_LOGW("Seconds [%ld vs %ld] [%ld]\n", secs1, secs2, duration);
         return RES_FAIL;
     }
 
@@ -199,17 +199,17 @@ int RuleEngineTimer::_StartTimer(TimerEnity *timer)
     evp.sigev_notify = SIGEV_THREAD;
     evp.sigev_notify_function = _sToplayTimerThread;
     if (timer_create(CLOCK_REALTIME, &evp, &timerid) < 0) {
-        LOGE("create timer error!\n");
+        RE_LOGE("create timer error!\n");
         return RES_FAIL;
     }
-    LOGD("ToplayTimer [%ld] [%ld] [%ld]\n", secs1, secs2, secs2 - secs1);
+    RE_LOGD("ToplayTimer [%ld] [%ld] [%ld]\n", secs1, secs2, secs2 - secs1);
 
     it.it_interval.tv_sec = 0;
     it.it_interval.tv_nsec = 0;
     it.it_value.tv_sec = (secs2 - secs1);
     it.it_value.tv_nsec = 0;
     if (timer_settime(timerid, 0, &it, NULL) < 0) {
-        LOGE("set timer error!\n");
+        RE_LOGE("set timer error!\n");
         timer_delete(timerid);
         return RES_FAIL;
     }
@@ -221,17 +221,17 @@ int RuleEngineTimer::_StartTimer(TimerEnity *timer)
     evp.sigev_notify = SIGEV_THREAD;
     evp.sigev_notify_function = _sDurationTimerThread;
     if (timer_create(CLOCK_REALTIME, &evp, &timerid) < 0) {
-        LOGE("create timer error!\n");
+        RE_LOGE("create timer error!\n");
         return RES_FAIL;
     }
-    LOGD("DurationTimer [%ld]\n", duration);
+    RE_LOGD("DurationTimer [%ld]\n", duration);
 
     it.it_interval.tv_sec = 0;
     it.it_interval.tv_nsec = 0;
     it.it_value.tv_sec = duration;
     it.it_value.tv_nsec = 0;
     if (timer_settime(timerid, 0, &it, NULL) < 0) {
-        LOGE("set timer error!\n");
+        RE_LOGE("set timer error!\n");
         timer_delete(timerid);
         return RES_FAIL;
     }
@@ -242,11 +242,11 @@ int RuleEngineTimer::_StartTimer(TimerEnity *timer)
 
 int RuleEngineTimer::_CancelTimer(TimerEnity *timer)
 {
-    if (timer->mToplayTimerID > 0) {
+    if (timer->mToplayTimerID != 0) {
         timer_delete(timer->mToplayTimerID);
         timer->mToplayTimerID = 0;
     }
-    if (timer->mDurationTimerID > 0) {
+    if (timer->mDurationTimerID != 0) {
         timer_delete(timer->mDurationTimerID);
         timer->mDurationTimerID = 0;
     }

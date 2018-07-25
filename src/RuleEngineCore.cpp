@@ -12,6 +12,7 @@
 #include "RuleEventHandler.h"
 #include "RuleEventTypes.h"
 #include "SysTime.h"
+#include "RuleEngineLog.h"
 
 #include<fstream>
 #include <sstream>
@@ -20,16 +21,16 @@
     do { \
         switch (item.type()) { \
         case TYPE_FLOAT: \
-            LOGD(tok"value  = float(%f)\n", item.as_float()); break; \
+            RE_LOGD(tok"value  = float(%f)\n", item.as_float()); break; \
         case TYPE_INTEGER: \
-            LOGD(tok"value = int(%d)\n", item.as_integer()); break; \
+            RE_LOGD(tok"value = int(%d)\n", item.as_integer()); break; \
         case TYPE_SYMBOL: \
         case TYPE_STRING: \
         case TYPE_INSTANCE_NAME: \
-            LOGD(tok"value = string(%s)\n", item.as_string().c_str()); break; \
+            RE_LOGD(tok"value = string(%s)\n", item.as_string().c_str()); break; \
         case TYPE_EXTERNAL_ADDRESS: \
         case TYPE_INSTANCE_ADDRESS: \
-            LOGD(tok"value = address(TODO)\n"); \
+            RE_LOGD(tok"value = address(TODO)\n"); \
         } \
     } while(0)
 
@@ -47,12 +48,13 @@ RuleEngineCore::RuleEngineCore(RuleEventHandler &handler)
     : mEnv(0)
     , mHandler(handler)
 {
-    LOGTT();
+    mLogLevel = getModuleLogLevel("clips");
+    RE_LOGTT();
 }
 
 RuleEngineCore::~RuleEngineCore()
 {
-    LOGTT();
+    RE_LOGTT();
     mInses.clear();
     finalize();
 }
@@ -62,7 +64,7 @@ void RuleEngineCore::setup(MsgPushPointer msgcall, InsPushPointer inscall, TxtPu
     if (!msgcall || !inscall || !txtcall)
         return;
 
-    LOGTT();
+    RE_LOGTT();
     Mutex::Autolock _l(&mEnvMutex);
 
     /* logger */
@@ -82,13 +84,10 @@ void RuleEngineCore::setup(MsgPushPointer msgcall, InsPushPointer inscall, TxtPu
         TYPE_TEM_FILE, TYPE_CLS_FILE, TYPE_RUL_FILE,
         MSG_RULE_RESPONSE, RUL_SUCCESS, RUL_FAIL, RUL_TIMEOUT,
         MSG_RULE_RHS, RHS_INS_NOT_FOUND, RHS_NTF_WRONG_TYPE, RHS_SEE_NOT_FOUND);
-    printf("############# %d\n", __LINE__);
     mEnv->build(data);
 
-    printf("############# %d\n", __LINE__);
     mEnv->setCallback(this);
 
-    printf("############# %d\n", __LINE__);
     /* regist function for clips script */
     mEnv->add_function("get-debug-level", std::make_shared<Functor<int>>(this, &RuleEngineCore::onCallGetDebugLevel));
     mEnv->add_function("get-root-dir", std::make_shared<Functor<std::string>>(this, &RuleEngineCore::onCallGetRootDir));
@@ -99,12 +98,11 @@ void RuleEngineCore::setup(MsgPushPointer msgcall, InsPushPointer inscall, TxtPu
     mEnv->add_function("msg-push", msgcall);
     mEnv->add_function("ins-push", inscall);
     mEnv->add_function("txt-push", txtcall);
-    printf("############# %d\n", __LINE__);
 }
 
 void RuleEngineCore::start(std::string &rootDir, GetFilesCallback callback)
 {
-    LOGTT();
+    RE_LOGTT();
     mRootDir = rootDir;
     mGetFilesCB = callback;
     mEnv->batch_evaluate(mRootDir + "/init.clp");
@@ -120,7 +118,7 @@ long RuleEngineCore::assertRun(std::string assert)
 
 void RuleEngineCore::finalize()
 {
-    LOGTT();
+    RE_LOGTT();
     if (!mEnv)
         return;
 
@@ -133,47 +131,141 @@ void RuleEngineCore::finalize()
 
 void RuleEngineCore::debug(int show)
 {
-    LOGI("===== BEGIN ===== \n");
+    RE_LOGI("===== BEGIN ===== \n");
     switch (show) {
         case DEBUG_SHOW_ALL:
         case DEBUG_SHOW_CLASSES:
-            LOGI(">> show classes:\n");
+            RE_LOGI(">> show classes:\n");
             assertRun("(show classes)");
             if (show)
                 break;
         case DEBUG_SHOW_RULES:
-            LOGI(">> show rules:\n");
+            RE_LOGI(">> show rules:\n");
             assertRun("(show rules)");
             if (show)
                 break;
         case DEBUG_SHOW_INSTANCES:
-            LOGI(">> show instances:\n");
+            RE_LOGI(">> show instances:\n");
             assertRun("(show instances)");
             {
                 InstancesMap::iterator it;
                 for (it = mInses.begin(); it != mInses.end(); ++it) {
-                    LOGI("\tInstance[%s]:\n", it->first.c_str());
+                    RE_LOGI("\tInstance[%s]:\n", it->first.c_str());
                     it->second->send("print");
                 }
             }
             if (show)
                 break;
         case DEBUG_SHOW_FACTS:
-            LOGI(">> show facts:\n");
+            RE_LOGI(">> show facts:\n");
             assertRun("(show facts)");
             if (show)
                 break;
         case DEBUG_SHOW_AGENDA:
-            LOGI(">> show agenda:\n");
+            RE_LOGI(">> show agenda:\n");
             assertRun("(show agenda)");
             if (show)
                 break;
         case DEBUG_SHOW_MEMORY:
-            LOGI(">> show memory:\n");
+            RE_LOGI(">> show memory:\n");
             assertRun("(show memory)");
             break;
     }
-    LOGI("===== END ===== \n");
+    RE_LOGI("===== END ===== \n");
+}
+
+void RuleEngineCore::setLogLevel(int level)
+{
+    Global::pointer log = 0;
+    log = mEnv->get_global("MAIN::LOG-LEVEL");
+    if (log) {
+        Value v(level);
+        log->set_value(v);
+        mLogLevel = level;
+    }
+}
+
+std::vector<std::string> RuleEngineCore::getClassNames(const char *slotName)
+{
+    Mutex::Autolock _l(&mEnvMutex);
+
+    std::vector<std::string> devices;
+    Class::pointer cls = mEnv->get_class_list_head();
+    for (; cls != 0; cls = cls->next()) {
+        if (slotName && !cls->slot_exists(slotName, true))
+            continue;
+        devices.push_back(cls->name());
+    }
+    return std::move(devices);
+}
+
+std::vector<std::string> RuleEngineCore::getSlotNames(const char *clsName)
+{
+    if (!clsName)
+        return std::vector<std::string>();
+
+    Mutex::Autolock _l(&mEnvMutex);
+    std::vector<std::string> slots;
+    Class::pointer cls = mEnv->get_class(clsName);
+    if (cls) {
+        std::vector<std::string> names = cls->slot_names(false);
+        for (uint32_t i = 0; i < names.size(); ++i)
+            slots.push_back(names[i]);
+    }
+    return std::move(slots);
+}
+
+std::vector<std::string> RuleEngineCore::getObjectNames(const char *clsName)
+{
+    if (!clsName)
+        return std::vector<std::string>();
+
+    Mutex::Autolock _l(&mEnvMutex);
+
+    std::vector<std::string> names;
+    Class::pointer cls;
+    InstancesMap::iterator it = mInses.begin();
+    for (; it != mInses.end(); ++it) {
+        Class::pointer cls = it->second->getClass();
+        if (cls && cls->name() == clsName)
+            names.push_back(it->first);
+    }
+    return std::move(names);
+}
+
+std::string RuleEngineCore::getObjectValue(const char *insName, const char *slotName)
+{
+    if (!insName || !slotName)
+        return std::string("");
+
+    Mutex::Autolock _l(&mEnvMutex);
+
+    std::string res("");
+    InstancesMap::iterator it = mInses.find(insName);
+    if (it != mInses.end()) {
+        Values rv;
+        char value[64] = {0};
+        rv = it->second->send(std::string("get-").append(slotName));
+        if (rv.size() == 1) {
+            switch (rv[0].type()) {
+                case TYPE_FLOAT:
+                    sprintf(value, "%f", rv[0].as_float());
+                    break;
+                case TYPE_INTEGER:
+                    sprintf(value, "%ld", rv[0].as_integer());
+                    break;
+                case TYPE_SYMBOL:
+                case TYPE_STRING:
+                case TYPE_INSTANCE_NAME:
+                    snprintf(value, 63, "%s", rv[0].as_string().c_str());
+                    break;
+                default:
+                    break;
+            }
+            res = value;
+        }
+    }
+    return std::move(res);
 }
 
 bool RuleEngineCore::handleTimer()
@@ -188,7 +280,7 @@ bool RuleEngineCore::handleTimer()
 
 std::string RuleEngineCore::handleClassSync(const char *clsName, const char *ver, const char *buildStr)
 {
-    LOGI("(%s, %s)\n%s\n", clsName, ver, buildStr);
+    RE_LOGI("(%s, %s)\n%s\n", clsName, ver, buildStr);
     if (!clsName || !ver || !buildStr)
         return std::string("");
 
@@ -197,12 +289,12 @@ std::string RuleEngineCore::handleClassSync(const char *clsName, const char *ver
     if (cls) {
         /* TODO: cannot delete? */
         if (!cls->undefine()) {
-            LOGW("delete class[%s] fail! possible using in rule LHS.\n", clsName);
+            RE_LOGW("delete class[%s] fail! possible using in rule LHS.\n", clsName);
             return std::string("");
         }
     }
     if (!mEnv->build(buildStr)) {
-        LOGW("build class [%s] error!\n", clsName);
+        RE_LOGW("build class [%s] error!\n", clsName);
         return std::string("");
     }
 
@@ -215,13 +307,13 @@ std::string RuleEngineCore::handleClassSync(const char *clsName, const char *ver
         return std::string("");
     of << buildStr << std::endl;
     of.close();
-    LOGTT();
+    RE_LOGTT();
     return std::move(path);
 }
 
 std::string RuleEngineCore::handleRuleSync(const char *ruleId, const char *ver, const char *buildStr)
 {
-    LOGI("(%s, %s)\n%s\n", ruleId, ver, buildStr);
+    RE_LOGI("(%s, %s)\n%s\n", ruleId, ver, buildStr);
     if (!ruleId || !ver || !buildStr)
         return std::string("");
 
@@ -230,7 +322,7 @@ std::string RuleEngineCore::handleRuleSync(const char *ruleId, const char *ver, 
     if (rule)
         rule->retract();
     if (!mEnv->build(buildStr)) {
-        LOGW("build rule [%s] error!\n", ruleId);
+        RE_LOGW("build rule [%s] error!\n", ruleId);
         return std::string("");
     }
 
@@ -248,38 +340,38 @@ std::string RuleEngineCore::handleRuleSync(const char *ruleId, const char *ver, 
 
 bool RuleEngineCore::handleInstanceAdd(const char *insName, const char *clsName)
 {
-    LOGI("(%s %s)\n", insName, clsName);
+    RE_LOGI("(%s %s)\n", insName, clsName);
     if (!insName || !clsName)
         return false;
 
     Mutex::Autolock _l(&mEnvMutex);
     InstancesMap::iterator it = mInses.find(insName);
     if (it != mInses.end()) {
-        LOGW("Instance[%s] already exists!\n", insName);
+        RE_LOGW("Instance[%s] already exists!\n", insName);
         return false;
     }
     std::stringstream ss;
     ss << "(" << insName << " of " << clsName << ")";
     Instance::pointer ins = mEnv->make_instance(ss.str().c_str());
     if (!ins) {
-        LOGW("Make instance[%s] fail!\n", insName);
+        RE_LOGW("Make instance[%s] fail!\n", insName);
         return false;
     }
     mInses.insert(std::pair<std::string, Instance::pointer>(insName, ins));
-    LOGD("Make instance[%s] success!\n", insName);
+    RE_LOGD("Make instance[%s] success!\n", insName);
     return true;
 }
 
 bool RuleEngineCore::handleInstanceDel(const char *insName)
 {
-    LOGI("(%s)\n", insName);
+    RE_LOGI("(%s)\n", insName);
     if (!insName)
         return false;
 
     Mutex::Autolock _l(&mEnvMutex);
     InstancesMap::iterator it = mInses.find(insName);
     if (it == mInses.end()) {
-        LOGW("Not found instance[%s]!\n", insName);
+        RE_LOGW("Not found instance[%s]!\n", insName);
         return false;
     }
     mInses.erase(it);
@@ -288,14 +380,14 @@ bool RuleEngineCore::handleInstanceDel(const char *insName)
 
 bool RuleEngineCore::handleInstancePut(const char *insName, const char *slot, const char *value)
 {
-    LOGI("(%s %s %s)\n", insName, slot, value);
+    RE_LOGI("(%s %s %s)\n", insName, slot, value);
     if (!insName || !slot || !value)
         return false;
 
     Mutex::Autolock _l(&mEnvMutex);
     InstancesMap::iterator it = mInses.find(insName);
     if (it == mInses.end()) {
-        LOGW("Not found instance[%s]!\n", insName);
+        RE_LOGW("Not found instance[%s]!\n", insName);
         return false;
     }
     it->second->send(std::string("put-").append(slot), value);
@@ -307,7 +399,7 @@ bool RuleEngineCore::handleInstancePut(const char *insName, const char *slot, co
 
 bool RuleEngineCore::enableRule(const char *ruleId)
 {
-    LOGI("enable rule [%s]\n", ruleId);
+    RE_LOGI("enable rule [%s]\n", ruleId);
     if (!ruleId)
         return false;
 
@@ -330,7 +422,7 @@ bool RuleEngineCore::enableRule(const char *ruleId)
         return true;
 
     if (!mEnv->build(buildStr.str())) {
-        LOGW("build rule [%s] error!\n", ruleId);
+        RE_LOGW("build rule [%s] error!\n", ruleId);
         return false;
     }
     return true;
@@ -338,7 +430,7 @@ bool RuleEngineCore::enableRule(const char *ruleId)
 
 bool RuleEngineCore::disableRule(const char *ruleId)
 {
-    LOGI("(disable rule: %s)\n", ruleId);
+    RE_LOGI("(disable rule: %s)\n", ruleId);
     if (!ruleId)
         return false;
     Mutex::Autolock _l(&mEnvMutex);
@@ -351,7 +443,7 @@ bool RuleEngineCore::disableRule(const char *ruleId)
 
 bool RuleEngineCore::refreshRule(const char *ruleId)
 {
-    LOGI("refreshRule(%s)\n", ruleId);
+    RE_LOGI("refreshRule(%s)\n", ruleId);
     if (!ruleId)
         return false;
     Mutex::Autolock _l(mEnvMutex);
@@ -365,29 +457,29 @@ bool RuleEngineCore::refreshRule(const char *ruleId)
 
 void RuleEngineCore::onCallClear()
 {
-    /* LOGTT(); */
+    /* RE_LOGTT(); */
 }
 
 void RuleEngineCore::onCallReset(void)
 {
-    LOGTT();
+    RE_LOGTT();
     mHandler.removeMessages(RET_REFRESH_TIMER);
     mHandler.sendEmptyMessage(RET_REFRESH_TIMER);
 }
 
 void RuleEngineCore::onPeriodic()
 {
-    /* LOGTT(); */
+    /* RE_LOGTT(); */
 }
 
 void RuleEngineCore::onRuleFiring()
 {
-    /* LOGTT(); */
+    /* RE_LOGTT(); */
 }
 
 int RuleEngineCore::onCallGetDebugLevel()
 {
-    return getLogLevel();
+    return mLogLevel;
 }
 
 std::string RuleEngineCore::onCallGetRootDir()
@@ -402,7 +494,7 @@ Values RuleEngineCore::onCallGetFiles(int fileType)
         std::vector<std::string> files;
         files = mGetFilesCB(fileType);
         for (size_t i = 0; i < files.size(); ++i) {
-            LOGD("clp file: [%s]\n", files[i].c_str());
+            RE_LOGD("clp file: [%s]\n", files[i].c_str());
             rv.push_back(files[i]);
         }
     }

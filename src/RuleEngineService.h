@@ -56,6 +56,12 @@ public:
 
     void debug(int show, bool urgent = false);
 
+    /* for monitor tool debug */
+    std::vector<std::string> getDevices();
+    std::vector<std::string> getSlots(const std::string &clsName);
+    std::vector<std::string> getInstaces(const std::string &clsName);
+    std::string getInstanceValue(const std::string &insName, const std::string &slotName);
+
 private:
     friend class RuleEventHandler;
     inline RuleEngineCore::pointer ccore();

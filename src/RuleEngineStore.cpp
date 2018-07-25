@@ -9,7 +9,7 @@
 #include "RuleEngineStore.h"
 #include "RuleEventHandler.h"
 
-#include "Log.h"
+#include "RuleEngineLog.h"
 
 #define DELAY_TIME (5*1000)
 
@@ -20,18 +20,18 @@ RuleEngineStore::RuleEngineStore(const std::string &db)
     , mDBFilePath(db), mDB(0), mDefTmplTab(0)
     , mDefClassTab(0), mDefRuleTab(0), mTimerEventTab(0)
 {
-    LOGTT();
+    RE_LOGTT();
 }
 
 RuleEngineStore::~RuleEngineStore()
 {
-    LOGTT();
+    RE_LOGTT();
     close();
 }
 
 bool RuleEngineStore::open()
 {
-    LOGTT();
+    RE_LOGTT();
     mHandler.removeMessages(RET_STORE_CLOSE);
     mHandler.sendEmptyMessageDelayed(RET_STORE_CLOSE, DELAY_TIME);
     /* mHandler.sendMessageDelayed(
@@ -46,7 +46,7 @@ bool RuleEngineStore::open()
 
 bool RuleEngineStore::close()
 {
-    LOGTT();
+    RE_LOGTT();
     Mutex::Autolock _l(&mDBMutex);
     if (mDefTmplTab)
         delete mDefTmplTab;
@@ -66,7 +66,7 @@ bool RuleEngineStore::close()
 /*{{{ public def table */
 bool RuleEngineStore::_UpdateDefTable(DefTable *table, const std::string &defName, const std::string &version, const std::string &fileName)
 {
-    LOGTT();
+    RE_LOGTT();
     Mutex::Autolock _l(&mDBMutex);
     DefInfo info;
     info.mDefName = defName;
@@ -84,7 +84,7 @@ std::vector<std::string> RuleEngineStore::_QueryDefFilePaths(DefTable *table, bo
         return std::vector<std::string>();
     }
 
-    LOGTT();
+    RE_LOGTT();
     Mutex::Autolock _l(&mDBMutex);
     return std::move(table->getFilePaths());
 }

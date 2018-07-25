@@ -66,6 +66,15 @@ public:
 
     void debug(int show);
 
+    void setLogLevel(int level);
+    int getLogLevel() { return mLogLevel; }
+
+    /* for monitor debug */
+    std::vector<std::string> getClassNames(const char *slotName);
+    std::vector<std::string> getSlotNames(const char *clsName);
+    std::vector<std::string> getObjectNames(const char *clsName);
+    std::string getObjectValue(const char *insName, const char *slotName);
+
 private:
 
     /* inherit from EnvironmentCallback */
@@ -87,6 +96,7 @@ private:
     InstancesMap mInses;
     std::string mRootDir;
     GetFilesCallback mGetFilesCB;
+    int mLogLevel;
 }; /* class RuleEngineCore */
 
 

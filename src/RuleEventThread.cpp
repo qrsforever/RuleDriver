@@ -7,7 +7,7 @@
  ****************************************************************************/
 
 #include "RuleEventThread.h"
-#include "Log.h"
+#include "RuleEngineLog.h"
 #include <unistd.h>
 
 using namespace UTILS;
@@ -34,7 +34,7 @@ void RuleEventThread::start()
 
 void RuleEventThread::run()
 {
-    LOGI("Rule EventThread:[%u]\n", id());
+    RE_LOGI("Rule EventThread:[%u]\n", id());
     mRun = true;
     return MessageLooper::run();
 }

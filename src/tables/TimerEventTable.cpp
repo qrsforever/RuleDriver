@@ -40,7 +40,7 @@ TimerEventTable::~TimerEventTable()
 
 bool TimerEventTable::deleteByKey(int eID)
 {
-    LOGTT();
+    SQL_LOGTT();
     std::string sql("DELETE FROM ");
     sql.append(tableName()).append(" WHERE ");
     sql.append(TE_FIELD_ID).append(" = ").append(int2String(eID));
@@ -49,7 +49,7 @@ bool TimerEventTable::deleteByKey(int eID)
 
 bool TimerEventTable::updateOrInsert(const TimerEventInfo &info)
 {
-    LOGTT();
+    SQL_LOGTT();
     SQLiteValue values[8];
     values[0] = SQLInt(info.mID);
     values[1] = SQLText(info.mYear);
@@ -76,7 +76,7 @@ bool TimerEventTable::updateOrInsert(const TimerEventInfo &info)
 
 std::vector<TimerEventInfo> TimerEventTable::getTimerEventInfos()
 {
-    LOGTT();
+    SQL_LOGTT();
     std::vector<TimerEventInfo> infos;
 
     std::string sql("SELECT ");
@@ -110,7 +110,7 @@ std::vector<TimerEventInfo> TimerEventTable::getTimerEventInfos()
 
 bool TimerEventTable::getTimerEventInfoByKey(int eID, TimerEventInfo &info)
 {
-    LOGTT();
+    SQL_LOGTT();
 
     std::string sql("SELECT ");
     sql.append(TE_FIELD_ID).append(", ");

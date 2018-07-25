@@ -231,19 +231,19 @@
 
 ; Response:
 ;   (rule-response ruleid sucess)
-(defmessage-handler RuleContext act-scene ($?ruleid-list)
+(defmessage-handler RuleContext act-rule ($?ruleid-list)
     (foreach ?rule-id (create$ $?ruleid-list)
         (bind ?ruleid (sym-cat ?rule-id))
         (if (defrule-module ?ruleid)
           then
             (bind ?rulname (sym-cat "_"?self:rule-id"-response-" ?ruleid))
-            (bind ?action-str (str-cat "act-scene "?ruleid))
+            (bind ?action-str (str-cat "act-rule "?ruleid))
             (bind ?RHS (str-cat "(send [" (instance-name ?self) "] action-success \"" (escape-quote ?action-str) "\")"))
             (bind ?pos (member$ ?rulname ?self:response-rules))
             (if (eq ?pos FALSE)
              then
-                (logd "(act-scene " ?ruleid ")")
-                (assert (scene ?ruleid))
+                (logd "(act-rule " ?ruleid ")")
+                (assert (rule ?ruleid))
                 (slot-direct-insert$ unanswer-list 1 ?action-str)
                 (bind ?LHS (str-cat "(rule-response "?ruleid" success)"))
                 (if (make-rule ?rulname ?*SALIENCE-HIGH* ?LHS ?RHS)

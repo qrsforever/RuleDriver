@@ -11,8 +11,8 @@
 #include "RuleEventTypes.h"
 #include "RuleEngineStore.h"
 #include "RuleEngineService.h"
+#include "RuleEngineLog.h"
 
-#include "Log.h"
 #include "Message.h"
 #include "MessageTypes.h"
 
@@ -43,7 +43,7 @@ void RuleEventHandler::handleMessage(Message *msg)
         return;
     }
 
-    LOGD("msg: [%d] [%d] [%d]\n", msg->what, msg->arg1, msg->arg2);
+    RE_LOGD("msg: [%d] [%d] [%d]\n", msg->what, msg->arg1, msg->arg2);
 
     switch(msg->what) {
         case RET_STORE_CLOSE:
@@ -51,6 +51,9 @@ void RuleEventHandler::handleMessage(Message *msg)
             break;
         case RET_DEBUG:
             ruleEngine().ccore()->debug(msg->arg1);
+            break;
+        case RET_LOG_LEVEL:
+            ruleEngine().ccore()->setLogLevel(msg->arg1);
             break;
         default:
             break;

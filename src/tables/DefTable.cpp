@@ -30,7 +30,7 @@ DefTable::~DefTable()
 
 bool DefTable::deleteByKey(const std::string &defName)
 {
-    LOGTT();
+    SQL_LOGTT();
     std::string sql("DELETE FROM ");
     sql.append(tableName()).append(" WHERE ");
     sql.append(DEF_FIELD_DEFNAME).append(" = '").append(defName).append("'");
@@ -39,7 +39,7 @@ bool DefTable::deleteByKey(const std::string &defName)
 
 bool DefTable::updateOrInsert(const DefInfo &info)
 {
-    LOGTT();
+    SQL_LOGTT();
     SQLiteValue values[3];
     values[0] = SQLText(info.mDefName);
     values[1] = SQLText(info.mVersion);
@@ -55,7 +55,7 @@ bool DefTable::updateOrInsert(const DefInfo &info)
 
 std::string DefTable::getVersion(std::string defName)
 {
-    LOGTT();
+    SQL_LOGTT();
     std::string ver("");
     std::string sql("SELECT ");
     sql.append(DEF_FIELD_VERSION).append(" FROM ").append(tableName());
@@ -72,7 +72,7 @@ std::string DefTable::getVersion(std::string defName)
 
 std::string DefTable::getFilePath(std::string defName)
 {
-    LOGTT();
+    SQL_LOGTT();
     std::string filepath("");
     std::string sql("SELECT ");
     sql.append(DEF_FIELD_CLPPATH).append(" FROM ").append(tableName());
@@ -89,7 +89,7 @@ std::string DefTable::getFilePath(std::string defName)
 
 std::vector<DefInfo> DefTable::getDefInfos()
 {
-    LOGTT();
+    SQL_LOGTT();
     std::vector<DefInfo> infos;
     std::string sql("SELECT ");
     sql.append(DEF_FIELD_DEFNAME).append(", ");
@@ -112,7 +112,7 @@ std::vector<DefInfo> DefTable::getDefInfos()
 
 std::vector<std::string> DefTable::getFilePaths()
 {
-    LOGTT();
+    SQL_LOGTT();
     std::vector<std::string> files;
     std::string sql("SELECT ");
     sql.append(DEF_FIELD_CLPPATH).append(" FROM ").append(tableName());
@@ -130,9 +130,9 @@ std::vector<std::string> DefTable::getFilePaths()
 void DefTable::showTable()
 {
     std::vector<DefInfo> infos = getDefInfos();
-    LOGD("Table[%s]:\n", tableName().c_str());
+    SQL_LOGD("Table[%s]:\n", tableName().c_str());
     for (size_t i = 0; i < infos.size(); ++i) {
-        LOGD("\t %s:[%s] %s[%s] %s[%s]\n",
+        SQL_LOGD("\t %s:[%s] %s[%s] %s[%s]\n",
             DEF_FIELD_DEFNAME, infos[i].mDefName.c_str(),
             DEF_FIELD_VERSION, infos[i].mVersion.c_str(),
             DEF_FIELD_CLPPATH, infos[i].mFilePath.c_str());
